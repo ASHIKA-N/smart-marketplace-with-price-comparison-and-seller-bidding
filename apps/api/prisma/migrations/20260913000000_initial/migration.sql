@@ -1,0 +1,15 @@
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE TABLE "User" ("id" TEXT PRIMARY KEY, "email" TEXT NOT NULL UNIQUE, "data" JSONB NOT NULL);
+CREATE TABLE "Shop" ("id" TEXT PRIMARY KEY, "ownerId" TEXT NOT NULL REFERENCES "User"("id"), "data" JSONB NOT NULL, "location" geography(Point,4326));
+CREATE INDEX "Shop_ownerId_idx" ON "Shop"("ownerId");
+CREATE INDEX "Shop_location_gist" ON "Shop" USING GIST ("location");
+CREATE TABLE "Product" ("id" TEXT PRIMARY KEY, "name" TEXT NOT NULL, "category" TEXT NOT NULL, "data" JSONB NOT NULL);
+CREATE INDEX "Product_category_idx" ON "Product"("category");
+CREATE INDEX "Product_name_trgm" ON "Product" USING GIN ("name" gin_trgm_ops);
+CREATE INDEX "Product_search_fts" ON "Product" USING GIN (to_tsvector('simple', "name" || ' ' || "category" || ' ' || COALESCE("data"->>'brand','') || ' ' || COALESCE("data"->>'tags','')));
+CREATE TABLE "Listing" ("id" TEXT PRIMARY KEY, "shopId" TEXT NOT NULL REFERENCES "Shop"("id"), "productId" TEXT NOT NULL REFERENCES "Product"("id"), "price" DECIMAL(12,2) NOT NULL CHECK ("price" >= 0), "stock" INTEGER NOT NULL CHECK ("stock" >= 0), "data" JSONB NOT NULL);
+CREATE INDEX "Listing_shopId_idx" ON "Listing"("shopId");
+CREATE INDEX "Listing_productId_price_idx" ON "Listing"("productId", "price");
+CREATE UNIQUE INDEX "Listing_shopId_productId_key" ON "Listing"("shopId", "productId");
+CREATE TABLE "AppRecord" ("key" TEXT PRIMARY KEY, "data" JSONB NOT NULL);

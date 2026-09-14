@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+model User {
+  id String @id
+  email String @unique
+  data Json
+  shops Shop[]
+}
+model Shop {
+  id String @id
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id])
+  data Json
+  location Unsupported("geography(Point,4326)")?
+  listings Listing[]
+  @@index([ownerId])
+}
+model Product {
+  id String @id
+  name String
+  category String
+  data Json
+  listings Listing[]
+  @@index([category])
+}
+model Listing {
+  id String @id
+  shopId String
+  productId String
+  shop Shop @relation(fields: [shopId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  price Decimal @db.Decimal(12, 2)
+  stock Int
+  data Json
+  @@index([shopId])
+  @@index([productId, price])
+  @@unique([shopId, productId])
+}
+model AppRecord {
+  key String @id
+  data Json
+}

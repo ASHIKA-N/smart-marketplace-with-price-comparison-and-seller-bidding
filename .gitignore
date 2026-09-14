@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.next-dev/
+.next-e2e/
+dist/
+.env
+.env.local
+*.tsbuildinfo
+apps/api/data/
+test-results/
+playwright-report/
+.npm-cache/
+.pnpm-store/
+.deps-backup/
+.deps-package-lock-backup.json

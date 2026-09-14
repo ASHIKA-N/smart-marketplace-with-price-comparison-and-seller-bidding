@@ -1,0 +1,13 @@
+node_modules
+.next
+.next-dev
+.next-e2e
+dist
+package-lock.json
+pnpm-lock.yaml
+apps/api/data
+.npm-cache
+.pnpm-store
+.deps-backup
+.deps-package-lock-backup.json
+test-results
