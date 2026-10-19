@@ -21,7 +21,13 @@ export default async function Page({
   const { slug } = await params;
   const [first, second, third] = slug;
   let content: React.ReactNode;
-  if (first === "search" && slug.length === 1) content = <SearchPage />;
+  if (
+    first === "seller" &&
+    ["login", "register"].includes(second) &&
+    slug.length === 2
+  )
+    content = <AuthPage mode={second as "login" | "register"} seller />;
+  else if (first === "search" && slug.length === 1) content = <SearchPage />;
   else if (
     [
       "login",

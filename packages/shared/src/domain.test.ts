@@ -76,3 +76,34 @@ test("trust is explainable and capped", () => {
 });
 test("demo distance is zero for same position", () =>
   assert.equal(distanceKm(12, 77, 12, 77), 0));
+
+test("Chennai catalog covers every category with purchasable listings", async () => {
+  const { createSeed } = await import("./seed");
+  const seed = createSeed();
+  for (const category of [
+    "Electronics",
+    "Fashion",
+    "Home & Living",
+    "Groceries",
+    "Beauty & Care",
+    "Sports & Outdoors",
+  ]) {
+    assert.ok(
+      seed.products.filter((p) => p.category === category).length >= 3,
+      category,
+    );
+  }
+  assert.equal(
+    new Set(seed.listings.map((l) => l.id)).size,
+    seed.listings.length,
+  );
+  for (const listing of seed.listings) {
+    assert.ok(Number.isFinite(listing.price) && listing.price > 0);
+    assert.ok(seed.products.some((p) => p.id === listing.productId));
+    assert.ok(
+      seed.shops.some(
+        (s) => s.id === listing.shopId && s.address.includes("Chennai"),
+      ),
+    );
+  }
+});

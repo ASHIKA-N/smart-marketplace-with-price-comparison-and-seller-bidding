@@ -113,10 +113,10 @@ test("API enforces ownership, stock, transitions, reviews, and refresh rotation"
         data: {
           name: "Not my shop",
           description: "An unauthorized change",
-          address: "Bengaluru",
+          address: "T. Nagar, Chennai",
           phone: "1234567890",
-          lat: 12,
-          lng: 77,
+          lat: 13.0418,
+          lng: 80.2341,
         },
       })
     ).status(),
@@ -221,9 +221,9 @@ test("new seller can create a shop and listing; buyer can request and accept a b
     data: {
       name: "Test Neighbourhood Shop",
       description: "A friendly shop created in an automated test.",
-      address: "Koramangala, Bengaluru",
-      lat: 12.9353,
-      lng: 77.6246,
+      address: "T. Nagar, Chennai",
+      lat: 13.0419,
+      lng: 80.2342,
       phone: "+91 9876543210",
     },
   });
@@ -369,4 +369,79 @@ test("account recovery uses one-time tokens and hides unknown accounts", async (
       })
     ).ok(),
   ).toBeTruthy();
+});
+
+test("signed in header survives navigation and reload, then signs out", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await page.getByLabel("Email address").fill("buyer@aroundly.local");
+  await page.getByLabel("Password", { exact: true }).fill("DemoPass123!");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Your profile", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".header-actions")).not.toContainText("Sign in");
+  await page.goto("/search?category=Sports+%26+Outdoors");
+  await expect(page.locator(".product-card")).toHaveCount(3);
+  await page.reload();
+  await expect(
+    page.getByRole("link", { name: "Your profile", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Your profile", exact: true }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(
+    page
+      .locator(".header-actions")
+      .getByRole("link", { name: "Sign in", exact: true }),
+  ).toBeVisible();
+});
+
+test("separate shopkeeper login opens reservation management", async ({
+  page,
+  request,
+}) => {
+  const base = "http://127.0.0.1:4010/api/v1";
+  const login = await request.post(`${base}/auth/login`, {
+    data: { email: "buyer@aroundly.local", password: "DemoPass123!" },
+  });
+  const buyer = await login.json();
+  const created = await request.post(`${base}/transactions`, {
+    headers: { Authorization: `Bearer ${buyer.accessToken}` },
+    data: { listingId: "listing-0-0", quantity: 1 },
+  });
+  expect(created.ok()).toBeTruthy();
+  const reservation = await created.json();
+  await page.goto("/seller/login");
+  await expect(
+    page.getByRole("heading", { name: "Shopkeeper sign in" }),
+  ).toBeVisible();
+  await page.getByLabel("Email address").fill("seller@aroundly.local");
+  await page.getByLabel("Password", { exact: true }).fill("DemoPass123!");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/\/seller$/);
+  await page.getByRole("link", { name: "Reservations", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Customer reservations" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Listings & stock" }),
+  ).toBeVisible();
+  const card = page
+    .locator(".panel")
+    .filter({ hasText: `#${reservation.id.slice(0, 8)}` });
+  await card
+    .getByRole("button", { name: "Confirm reservation", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Confirm update" })
+    .click();
+  await expect(card.locator(".badge")).toHaveText("confirmed");
+  await card.getByRole("button", { name: "Mark picked up & paid" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Confirm update" })
+    .click();
+  await expect(card.locator(".badge")).toHaveText("completed");
 });

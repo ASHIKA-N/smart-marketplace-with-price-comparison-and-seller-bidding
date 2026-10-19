@@ -21,6 +21,7 @@ export default function ShopMap({
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     if (!element.current) return;
+    setFailed(false);
     let instance: maplibregl.Map;
     try {
       instance = new maplibregl.Map({
@@ -45,6 +46,9 @@ export default function ShopMap({
       return;
     }
     instance.addControl(new maplibregl.NavigationControl(), "top-right");
+    new maplibregl.Marker({ color: "#267c66" })
+      .setLngLat([location.lng, location.lat])
+      .addTo(instance);
     instance.on("error", () => setFailed(true));
     map.current = instance;
     return () => {
@@ -73,6 +77,21 @@ export default function ShopMap({
   return (
     <div className="map-container">
       <div className="map-canvas" ref={element} />
+      {failed && (
+        <iframe
+          className="map-embed-fallback"
+          title="Chennai shops on OpenStreetMap"
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=${location.lng - 0.06}%2C${location.lat - 0.05}%2C${location.lng + 0.06}%2C${location.lat + 0.05}&layer=mapnik&marker=${shop?.lat ?? location.lat}%2C${shop?.lng ?? location.lng}`}
+        />
+      )}
+      <a
+        className="map-external"
+        href={`https://www.openstreetmap.org/?mlat=${shop?.lat ?? location.lat}&mlon=${shop?.lng ?? location.lng}#map=14/${shop?.lat ?? location.lat}/${shop?.lng ?? location.lng}`}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Open in OpenStreetMap
+      </a>
       {shop ? (
         <div className="map-note">
           <strong>{shop.name}</strong>

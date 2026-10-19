@@ -56,9 +56,25 @@ export function Shell({ children }: { children: React.ReactNode }) {
     enabled: !!user,
   });
   function locate() {
+    if (!navigator.geolocation) {
+      toast("GPS is unavailable. Choose a Chennai neighbourhood below.");
+      return;
+    }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (p) => {
+        if (
+          p.coords.latitude < 12.8 ||
+          p.coords.latitude > 13.3 ||
+          p.coords.longitude < 80 ||
+          p.coords.longitude > 80.35
+        ) {
+          setLocating(false);
+          toast(
+            "We currently serve Chennai only. Choose a Chennai neighbourhood below.",
+          );
+          return;
+        }
         setLocation({
           lat: p.coords.latitude,
           lng: p.coords.longitude,
@@ -131,11 +147,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </button>
             {user ? (
               <Link
-                className="avatar"
+                className="avatar signed-in-account"
                 href="/profile"
                 aria-label="Your profile"
               >
                 {user.name.charAt(0)}
+                <span className="account-name">{user.name.split(" ")[0]}</span>
               </Link>
             ) : (
               <Button asChild variant="outline" size="sm">
@@ -177,7 +194,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
             >
               {user ? "Your account" : "Sign in / Create account"}
             </Link>
-            <Link className="seller-nav" href="/seller">
+            <Link
+              className="seller-nav"
+              href={
+                user?.roles.includes("SELLER") ? "/seller" : "/seller/login"
+              }
+            >
               <Store size={16} /> Seller dashboard <ArrowUpRight size={14} />
             </Link>
           </nav>
@@ -239,9 +261,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </Button>
           <span className="eyebrow">OR CHOOSE A NEIGHBOURHOOD</span>
           {[
-            { name: "Koramangala, Bengaluru", lat: 12.9352, lng: 77.6245 },
-            { name: "Indiranagar, Bengaluru", lat: 12.9719, lng: 77.6412 },
-            { name: "HSR Layout, Bengaluru", lat: 12.918, lng: 77.635 },
+            { name: "T. Nagar, Chennai", lat: 13.0418, lng: 80.2341 },
+            { name: "Anna Nagar, Chennai", lat: 13.085, lng: 80.2101 },
+            { name: "Adyar, Chennai", lat: 13.0067, lng: 80.2206 },
           ].map((l) => (
             <button
               className="location-option"
@@ -395,8 +417,8 @@ export function AuthRequired({
         <EmptyState
           title="A little more local, with an account"
           description="Sign in to save your favourites, reserve products, and connect with local sellers."
-          href="/login"
-          label="Sign in"
+          href={seller ? "/seller/login" : "/login"}
+          label={seller ? "Shopkeeper sign in" : "Sign in"}
         />
       </div>
     );

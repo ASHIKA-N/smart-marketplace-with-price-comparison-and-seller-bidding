@@ -66,6 +66,7 @@ export function SellerPage({ tab = "" }: { tab?: string }) {
 function DashboardPage({ tab }: { tab: string }) {
   const { data, isPending, error, refetch } = useQuery({
     queryKey: ["seller"],
+    refetchInterval: 15000,
     queryFn: () => api<Dashboard>("/seller"),
   });
   return (
@@ -338,7 +339,7 @@ function ShopEditor({ data }: { data: Dashboard }) {
               required
               min={-90}
               max={90}
-              defaultValue={shop?.lat || 12.9352}
+              defaultValue={shop?.lat || 13.0418}
             />
           </label>
           <label className="field">
@@ -350,7 +351,7 @@ function ShopEditor({ data }: { data: Dashboard }) {
               required
               min={-180}
               max={180}
-              defaultValue={shop?.lng || 77.6245}
+              defaultValue={shop?.lng || 80.2341}
             />
           </label>
           <label className="field full">
@@ -863,7 +864,12 @@ function SellerTransactions({ data: d }: { data: Dashboard }) {
   );
   return (
     <>
-      <h2 className="section-title">Your neighbours are shopping.</h2>
+      <h2 className="section-title">Customer reservations</h2>
+      <p className="muted mb">
+        Confirm availability, prepare the items, then mark picked up and paid
+        after collection. Cancelling releases reserved stock and notifies the
+        customer. Updates refresh every 15 seconds.
+      </p>
       {d.transactions.length ? (
         d.transactions
           .slice()

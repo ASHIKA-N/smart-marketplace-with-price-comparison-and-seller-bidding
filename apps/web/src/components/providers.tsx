@@ -26,7 +26,7 @@ const LocationContext = createContext<{
   location: { lat: number; lng: number; name: string };
   setLocation: (v: { lat: number; lng: number; name: string }) => void;
 }>({
-  location: { lat: 12.9352, lng: 77.6245, name: "Koramangala, Bengaluru" },
+  location: { lat: 13.0418, lng: 80.2341, name: "T. Nagar, Chennai" },
   setLocation: () => {},
 });
 export const useLocation = () => useContext(LocationContext);
@@ -40,9 +40,9 @@ function Session({ children }: { children: ReactNode }) {
   });
   const [toast, setToast] = useState("");
   const [location, setLocation] = useState({
-    lat: 12.9352,
-    lng: 77.6245,
-    name: "Koramangala, Bengaluru",
+    lat: 13.0418,
+    lng: 80.2341,
+    name: "T. Nagar, Chennai",
   });
   const showToast = (message: string) => {
     setToast(message);
@@ -59,14 +59,20 @@ function Session({ children }: { children: ReactNode }) {
             { method: "POST", body: { email, password } },
           );
           setAccessToken(result.accessToken);
-          cache.clear();
+          await cache.cancelQueries();
           cache.setQueryData(["me"], result.user);
+          await cache.resetQueries({
+            predicate: (query) => query.queryKey[0] !== "me",
+          });
         },
         logout: async () => {
           await api("/auth/logout", { method: "POST" });
           setAccessToken();
-          cache.clear();
+          await cache.cancelQueries();
           cache.setQueryData(["me"], null);
+          await cache.resetQueries({
+            predicate: (query) => query.queryKey[0] !== "me",
+          });
         },
       }}
     >

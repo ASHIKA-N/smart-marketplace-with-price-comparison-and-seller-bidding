@@ -21,8 +21,8 @@ import {
 export const searchSchema = z.object({
   q: z.string().max(100).default(""),
   category: z.string().max(80).default("All"),
-  lat: z.coerce.number().min(-90).max(90).default(12.9352),
-  lng: z.coerce.number().min(-180).max(180).default(77.6245),
+  lat: z.coerce.number().min(-90).max(90).default(13.0418),
+  lng: z.coerce.number().min(-180).max(180).default(80.2341),
   radius: z.coerce.number().positive().max(100).default(10),
   min: z.coerce.number().nonnegative().default(0),
   max: z.coerce.number().nonnegative().default(1000000),
@@ -40,8 +40,14 @@ export const shopSchema = z.object({
   name: z.string().min(3).max(100),
   description: z.string().min(10).max(2000),
   address: z.string().min(5).max(300),
-  lat: z.coerce.number().min(-90).max(90),
-  lng: z.coerce.number().min(-180).max(180),
+  lat: z.coerce
+    .number()
+    .min(12.8, "Shops must be in Chennai")
+    .max(13.3, "Shops must be in Chennai"),
+  lng: z.coerce
+    .number()
+    .min(80, "Shops must be in Chennai")
+    .max(80.35, "Shops must be in Chennai"),
   phone: z.string().min(7).max(25),
   image: z
     .string()

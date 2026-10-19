@@ -19,7 +19,9 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 export function AuthPage({
   mode,
+  seller = false,
 }: {
+  seller?: boolean;
   mode:
     | "login"
     | "register"
@@ -36,7 +38,7 @@ export function AuthPage({
   const [busy, setBusy] = useState(false);
   const form = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "", password: "", name: "", seller: false },
+    defaultValues: { email: "", password: "", name: "", seller },
   });
   const register = mode === "register";
   const recovery = [
@@ -45,20 +47,31 @@ export function AuthPage({
     "verify-email",
   ].includes(mode);
   const title = register
-    ? "Your neighbourhood awaits."
+    ? seller
+      ? "Open your Chennai storefront."
+      : "Your neighbourhood awaits."
     : mode === "forgot-password"
       ? "Let’s get you back in."
       : mode === "reset-password"
         ? "A fresh start."
         : mode === "verify-email"
           ? "Make it official."
-          : "Welcome back, neighbour.";
+          : seller
+            ? "Shopkeeper sign in"
+            : "Welcome back, neighbour.";
   async function signIn(email: string, password: string) {
     setError("");
     setBusy(true);
     try {
       await login(email, password);
-      router.push("/");
+      const account = await api<{ roles: string[] }>("/users/me");
+      if (seller && !account.roles.includes("SELLER")) {
+        setError(
+          "This account is a customer account. Enable selling in your profile or create a shopkeeper account.",
+        );
+        return;
+      }
+      router.push(seller ? "/seller" : "/");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -73,9 +86,12 @@ export function AuthPage({
     setError("");
     setBusy(true);
     try {
-      await api("/auth/register", { method: "POST", body: v });
+      await api("/auth/register", {
+        method: "POST",
+        body: { ...v, seller: seller || v.seller },
+      });
       await login(v.email, v.password);
-      router.push(v.seller ? "/seller/shop" : "/");
+      router.push(seller || v.seller ? "/seller/shop" : "/");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -266,10 +282,17 @@ export function AuthPage({
                 )}
               </label>
               {register ? (
-                <label className="checkbox">
-                  <input {...form.register("seller")} type="checkbox" />I also
-                  want to sell in my neighbourhood
-                </label>
+                seller ? (
+                  <p className="muted">
+                    Your shopkeeper account includes a shop profile, catalog,
+                    stock, offers, reservations and buyer requests.
+                  </p>
+                ) : (
+                  <label className="checkbox">
+                    <input {...form.register("seller")} type="checkbox" />I also
+                    want to sell in my neighbourhood
+                  </label>
+                )
               ) : (
                 <div className="row spread">
                   <span className="muted">
@@ -300,10 +323,28 @@ export function AuthPage({
               {register
                 ? "Already part of the neighbourhood?"
                 : "New around here?"}{" "}
-              <Link href={register ? "/login" : "/register"}>
+              <Link
+                href={
+                  seller
+                    ? register
+                      ? "/seller/login"
+                      : "/seller/register"
+                    : register
+                      ? "/login"
+                      : "/register"
+                }
+              >
                 {register ? "Sign in" : "Create an account"}
               </Link>
             </div>
+            <Link
+              className="auth-switch"
+              href={seller ? "/login" : "/seller/login"}
+            >
+              {seller
+                ? "Shopping instead? Customer sign in"
+                : "Own a shop? Shopkeeper sign in"}
+            </Link>
             <DemoLogin signIn={signIn} busy={busy} />
           </>
         )}

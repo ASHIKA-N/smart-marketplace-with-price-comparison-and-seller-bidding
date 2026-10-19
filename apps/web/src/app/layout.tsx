@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     template: "%s | Aroundly",
   },
   description:
-    "Discover neighbourhood shops, compare local prices, and find something you love. Your local marketplace in Bengaluru.",
+    "Discover neighbourhood shops, compare local prices, and find something you love. Your local marketplace in Chennai.",
 };
 export default function RootLayout({
   children,

@@ -24,6 +24,27 @@ export class StoreService implements OnModuleInit {
     } else {
       try {
         this.state = JSON.parse(await fs.readFile(this.file, "utf8")) as Store;
+        // Add new demo catalog entries without losing accounts or reservations.
+        const seed = createSeed();
+        for (const product of seed.products) {
+          if (!this.state.products.some((p) => p.id === product.id)) {
+            this.state.products.push(product);
+            this.state.listings.push(
+              ...seed.listings.filter((l) => l.productId === product.id),
+            );
+          }
+        }
+        for (const shop of this.state.shops) {
+          const original = seed.shops.find((s) => s.id === shop.id);
+          if (original && shop.lng > 77 && shop.lng < 78) {
+            Object.assign(shop, {
+              lat: original.lat,
+              lng: original.lng,
+              address: original.address,
+            });
+          }
+        }
+        await this.saveFile();
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
         this.state = await this.seed();

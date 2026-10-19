@@ -70,8 +70,20 @@ export function SearchPage() {
           aria-label="Product filters"
         >
           <div className="filter-title">
-            Filters
-            <button onClick={() => router.push("/search")}>Reset all</button>
+            <span>
+              <SlidersHorizontal size={17} /> Refine your finds
+            </span>
+            <button
+              onClick={() =>
+                router.push(
+                  params.get("sort") === "deal"
+                    ? "/search?sort=deal"
+                    : "/search",
+                )
+              }
+            >
+              Reset all
+            </button>
           </div>
           <div className="filter-group">
             <strong>Category</strong>
