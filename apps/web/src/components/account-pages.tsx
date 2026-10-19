@@ -51,7 +51,15 @@ function Favorites() {
     error,
   } = useQuery({
     queryKey: ["favorites", user?.id],
-    queryFn: () => api<{ targetId: string; kind: string }[]>("/favorites"),
+    queryFn: () =>
+      api<
+        {
+          targetId: string;
+          kind: string;
+          product?: Product;
+          shop?: ShopType;
+        }[]
+      >("/favorites"),
   });
   const products = useQuery({
     queryKey: ["saved-products", location],
@@ -67,14 +75,32 @@ function Favorites() {
         `/shops?lat=${location.lat}&lng=${location.lng}&radius=100`,
       ),
   });
-  const selectedProducts =
-    products.data?.items.filter((p) =>
-      favorites.some((f) => f.targetId === p.id && f.kind === "product"),
-    ) || [];
-  const selectedShops =
-    shops.data?.filter((s) =>
-      favorites.some((f) => f.targetId === s.id && f.kind === "shop"),
-    ) || [];
+  const selectedProducts: ProductResult[] = favorites
+    .filter((f) => f.kind === "product")
+    .map((f) => {
+      const live = products.data?.items.find((p) => p.id === f.targetId);
+      if (live) return live;
+      if (f.product) {
+        return {
+          ...f.product,
+          price: 0,
+          maxPrice: 0,
+          sellerCount: 0,
+          distance: 0,
+          discount: 0,
+        };
+      }
+      return null;
+    })
+    .filter((p): p is ProductResult => p !== null);
+  const selectedShops: ShopType[] = favorites
+    .filter((f) => f.kind === "shop")
+    .map((f) => {
+      const live = shops.data?.find((s) => s.id === f.targetId);
+      if (live) return live;
+      return f.shop || null;
+    })
+    .filter((s): s is ShopType => s !== null);
   return (
     <div className="container page-body">
       <PageIntro
@@ -207,17 +233,21 @@ function Transactions() {
             <article className="transaction-card" key={t.id}>
               <div className="row">
                 <Image
-                  src={t.product.image}
-                  alt={t.product.name}
+                  src={
+                    t.product?.image ||
+                    "/images/photo-1441986300917-64674bd600d8.jpg"
+                  }
+                  alt={t.product?.name || "Product"}
                   width={78}
                   height={78}
                 />
                 <div>
                   <Link href={`/products/${t.productId}`}>
-                    <h3>{t.product.name}</h3>
+                    <h3>{t.product?.name || "Product"}</h3>
                   </Link>
                   <p>
-                    {t.shop.name} · Quantity {t.quantity}
+                    {t.shop?.name || "Neighbourhood shop"} · Quantity{" "}
+                    {t.quantity}
                   </p>
                   <p>
                     {new Date(t.createdAt).toLocaleDateString("en-IN", {
@@ -433,7 +463,7 @@ function Requests() {
             <div className="panel request-card" key={r.id}>
               <div className="row spread">
                 <div>
-                  <h3>{r.product.name}</h3>
+                  <h3>{r.product?.name || "Requested product"}</h3>
                   <p className="muted">
                     Target {money(r.targetPrice)} per item · Quantity{" "}
                     {r.quantity}
@@ -455,7 +485,8 @@ function Requests() {
                       <ShieldCheck size={23} color="var(--green)" />
                       <div>
                         <strong>
-                          {b.shop.name} · {money(b.price)} / item
+                          {b.shop?.name || "Local seller"} · {money(b.price)} /
+                          item
                         </strong>
                         <p>
                           {b.note || "A personal offer from a local seller."}
@@ -463,7 +494,7 @@ function Requests() {
                       </div>
                       <Button
                         size="sm"
-                        disabled={r.status === "CLOSED"}
+                        disabled={r.status === "CLOSED" || !b.listingId}
                         onClick={() => {
                           mutation.reset();
                           setAccept({ bid: b, request: r });
@@ -492,7 +523,7 @@ function Requests() {
         description="Accept this offer to reserve your items. Other offers on this request will close."
       >
         <div className="stack">
-          <p>{accept?.bid.shop.name}</p>
+          <p>{accept?.bid.shop?.name || "Local seller"}</p>
           <strong>
             Total:{" "}
             {money((accept?.bid.price || 0) * (accept?.request.quantity || 1))}

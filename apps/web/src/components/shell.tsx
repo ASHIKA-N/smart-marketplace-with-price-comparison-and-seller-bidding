@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   MapPin,
   ChevronDown,
@@ -43,7 +43,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const cache = useQueryClient();
   const path = usePathname();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { location, setLocation } = useLocation();
   const toast = useToast();
   const [locationOpen, setLocationOpen] = useState(false);
@@ -55,6 +55,24 @@ export function Shell({ children }: { children: React.ReactNode }) {
     queryFn: () => api<Notification[]>("/notifications"),
     enabled: !!user,
   });
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (
+        e.key === "/" &&
+        !["INPUT", "TEXTAREA", "SELECT"].includes(
+          (document.activeElement as HTMLElement)?.tagName,
+        )
+      ) {
+        e.preventDefault();
+        const input = document.getElementById(
+          "header-search-input",
+        ) as HTMLInputElement | null;
+        input?.focus();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
   function locate() {
     if (!navigator.geolocation) {
       toast("GPS is unavailable. Choose a Chennai neighbourhood below.");
@@ -121,6 +139,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <form className="header-search" action="/search">
             <Search size={18} />
             <input
+              id="header-search-input"
               name="q"
               aria-label="Search products"
               placeholder="Search for a product, brand, or store"
@@ -194,6 +213,30 @@ export function Shell({ children }: { children: React.ReactNode }) {
             >
               {user ? "Your account" : "Sign in / Create account"}
             </Link>
+            {user && (
+              <button
+                className="mobile-account"
+                style={{
+                  textAlign: "left",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 14px",
+                  fontSize: 14,
+                  color: "inherit",
+                }}
+                onClick={async () => {
+                  setMenu(false);
+                  await logout();
+                  router.push("/");
+                }}
+              >
+                <LogOut size={16} /> Sign out
+              </button>
+            )}
             <Link
               className="seller-nav"
               href={
@@ -304,6 +347,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           )}
           <Button
             variant="outline"
+            disabled={!notes.some((n) => !n.read)}
             onClick={async () => {
               try {
                 await api("/notifications/read", { method: "POST" });

@@ -29,11 +29,20 @@ async function refresh() {
       });
   return refreshPromise;
 }
+export function getAccessToken() {
+  return accessToken;
+}
 export async function api<T>(
   path: string,
   options: { method?: string; body?: unknown } = {},
   retry = true,
 ): Promise<T> {
+  if (path === "/users/me" && !accessToken && retry) {
+    const refreshed = await refresh();
+    if (!refreshed) {
+      throw new ApiError("Please sign in to continue.", 401);
+    }
+  }
   const response = await fetch(`/api/v1${path}`, {
     method: options.method || "GET",
     credentials: "include",

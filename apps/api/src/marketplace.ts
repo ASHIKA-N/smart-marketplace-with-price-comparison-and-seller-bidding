@@ -27,9 +27,9 @@ export const searchSchema = z.object({
   min: z.coerce.number().nonnegative().default(0),
   max: z.coerce.number().nonnegative().default(1000000),
   rating: z.coerce.number().min(0).max(5).default(0),
-  inStock: z.enum(["true", "false"]).default("false"),
-  open: z.enum(["true", "false"]).default("false"),
-  unique: z.enum(["true", "false"]).default("false"),
+  inStock: z.preprocess((v) => (v === "" || v == null ? "false" : v), z.enum(["true", "false"]).default("false")),
+  open: z.preprocess((v) => (v === "" || v == null ? "false" : v), z.enum(["true", "false"]).default("false")),
+  unique: z.preprocess((v) => (v === "" || v == null ? "false" : v), z.enum(["true", "false"]).default("false")),
   sort: z
     .enum(["popular", "price", "nearest", "rating", "deal"])
     .default("popular"),
@@ -220,7 +220,7 @@ export class MarketplaceService {
             maxPrice: Math.max(...listings.map((l) => l.price)),
             sellerCount: listings.length,
             distance: Math.min(...listings.map((l) => l.shop.distance || 0)),
-            discount: Math.round((1 - best.finalPrice / best.price) * 100),
+            discount: best.price > 0 ? Math.round((1 - best.finalPrice / best.price) * 100) : 0,
           },
         ];
       });
@@ -451,12 +451,16 @@ export class MarketplaceService {
       ))
         throw new BadRequestException("Invalid status transition.");
       t.status = status;
-      if (status === "CANCELLED")
-        s.listings.find((l) => l.id === t.listingId)!.stock += t.quantity;
+      if (status === "CANCELLED") {
+        const listing = s.listings.find((l) => l.id === t.listingId);
+        if (listing) listing.stock += t.quantity;
+      }
       if (status === "COMPLETED") shop.completed++;
+      // Notify the other party: seller actions notify the buyer; buyer cancellation notifies the seller.
+      const notifyUserId = seller ? t.buyerId : shop.ownerId;
       s.notifications.push({
         id: randomUUID(),
-        userId: t.buyerId,
+        userId: notifyUserId,
         title: `Reservation ${status.toLowerCase()}`,
         read: false,
         createdAt: new Date().toISOString(),
@@ -492,9 +496,10 @@ export class MarketplaceService {
       };
       s.reviews.push(r);
       for (const item of [
-        s.products.find((p) => p.id === t.productId)!,
-        s.shops.find((sh) => sh.id === t.shopId)!,
+        s.products.find((p) => p.id === t.productId),
+        s.shops.find((sh) => sh.id === t.shopId),
       ]) {
+        if (!item) continue;
         item.rating =
           Math.round(
             ((item.rating * item.reviews + data.rating) / (item.reviews + 1)) *
@@ -536,7 +541,19 @@ export class MarketplaceService {
   }
   async favorites(user: PublicUser) {
     const s = await this.db.read();
-    return s.favorites.filter((f) => f.userId === user.id);
+    return s.favorites
+      .filter((f) => f.userId === user.id)
+      .map((f) => ({
+        ...f,
+        product:
+          f.kind === "product"
+            ? s.products.find((p) => p.id === f.targetId)
+            : undefined,
+        shop:
+          f.kind === "shop"
+            ? s.shops.find((sh) => sh.id === f.targetId)
+            : undefined,
+      }));
   }
   async favorite(user: PublicUser, input: unknown) {
     const f = z

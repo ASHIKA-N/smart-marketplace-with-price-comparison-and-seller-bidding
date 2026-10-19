@@ -17,7 +17,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { hash, verify } from "argon2";
 import { randomUUID } from "node:crypto";
-import { AuthService, AuthGuard, type AuthRequest, publicUser } from "./auth";
+import { AuthService, AuthGuard, type AuthRequest, publicUser, digest } from "./auth";
 import { MarketplaceService, requireSeller } from "./marketplace";
 import { StoreService } from "./store";
 import { NotificationService } from "./notifications";
@@ -293,12 +293,20 @@ export class UsersController {
     const data = z
       .object({ currentPassword: z.string(), password })
       .parse(body);
+    // Capture the caller's refresh token from the httpOnly cookie so we can
+    // keep their current session alive while invalidating all other sessions.
+    const currentTokenHash = digest(
+      String((req as unknown as { cookies: Record<string, string> }).cookies?.refresh || ""),
+    );
     return this.store.mutate(async (s) => {
       const u = s.users.find((u) => u.id === req.user.id)!;
       if (!(await verify(u.passwordHash, data.currentPassword)))
         throw new ForbiddenException("Current password is incorrect.");
       u.passwordHash = await hash(data.password);
-      s.sessions = s.sessions.filter((t) => t.userId !== u.id);
+      // Remove all sessions for this user except the caller's current session.
+      s.sessions = s.sessions.filter(
+        (t) => t.userId !== u.id || t.hash === currentTokenHash,
+      );
       return { ok: true };
     });
   }

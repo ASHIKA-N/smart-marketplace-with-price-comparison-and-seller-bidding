@@ -34,7 +34,13 @@ function Session({ children }: { children: ReactNode }) {
   const cache = useQueryClient();
   const { data, isPending } = useQuery({
     queryKey: ["me"],
-    queryFn: () => api<PublicUser>("/users/me"),
+    queryFn: async () => {
+      try {
+        return await api<PublicUser>("/users/me");
+      } catch {
+        return null;
+      }
+    },
     retry: false,
     staleTime: 5 * 60000,
   });
@@ -66,11 +72,15 @@ function Session({ children }: { children: ReactNode }) {
           });
         },
         logout: async () => {
-          await api("/auth/logout", { method: "POST" });
+          try {
+            await api("/auth/logout", { method: "POST" });
+          } catch {
+            // Ensure local logout completes even if network is unreachable
+          }
           setAccessToken();
           await cache.cancelQueries();
           cache.setQueryData(["me"], null);
-          await cache.resetQueries({
+          cache.removeQueries({
             predicate: (query) => query.queryKey[0] !== "me",
           });
         },

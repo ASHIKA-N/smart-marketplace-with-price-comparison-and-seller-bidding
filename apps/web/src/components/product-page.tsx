@@ -157,9 +157,14 @@ export function ProductPage({
             </Button>
             <Button
               variant="outline"
-              onClick={() =>
-                user ? setRequestOpen(true) : router.push("/login")
-              }
+              onClick={() => {
+                if (user) {
+                  request.reset();
+                  setRequestOpen(true);
+                } else {
+                  router.push("/login");
+                }
+              }}
             >
               <MessageSquare size={16} />
               Request a better price
@@ -236,7 +241,7 @@ export function ProductPage({
                       </div>
                     </div>
                   </td>
-                  <td>{l.shop.distance?.toFixed(1)} km</td>
+                  <td>{l.shop.distance != null ? `${l.shop.distance.toFixed(1)} km` : "—"}</td>
                   <td>
                     <span className="rating">
                       <Star size={12} fill="currentColor" />

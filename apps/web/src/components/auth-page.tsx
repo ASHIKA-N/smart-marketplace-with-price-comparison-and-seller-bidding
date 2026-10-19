@@ -59,12 +59,20 @@ export function AuthPage({
           : seller
             ? "Shopkeeper sign in"
             : "Welcome back, neighbour.";
-  async function signIn(email: string, password: string) {
+  async function signIn(
+    email: string,
+    password: string,
+    targetRedirect?: string,
+  ) {
     setError("");
     setBusy(true);
     try {
       await login(email, password);
       const account = await api<{ roles: string[] }>("/users/me");
+      if (targetRedirect) {
+        router.push(targetRedirect);
+        return;
+      }
       if (seller && !account.roles.includes("SELLER")) {
         setError(
           "This account is a customer account. Enable selling in your profile or create a shopkeeper account.",
@@ -356,7 +364,11 @@ function DemoLogin({
   signIn,
   busy,
 }: {
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (
+    email: string,
+    password: string,
+    targetRedirect?: string,
+  ) => Promise<void>;
   busy: boolean;
 }) {
   const [available, setAvailable] = useState(false);
@@ -379,7 +391,7 @@ function DemoLogin({
           variant="outline"
           size="sm"
           disabled={busy}
-          onClick={() => signIn("buyer@aroundly.local", "DemoPass123!")}
+          onClick={() => signIn("buyer@aroundly.local", "DemoPass123!", "/")}
         >
           Try as a buyer
         </Button>
@@ -388,7 +400,9 @@ function DemoLogin({
           variant="outline"
           size="sm"
           disabled={busy}
-          onClick={() => signIn("seller@aroundly.local", "DemoPass123!")}
+          onClick={() =>
+            signIn("seller@aroundly.local", "DemoPass123!", "/seller")
+          }
         >
           Try as a seller
         </Button>
