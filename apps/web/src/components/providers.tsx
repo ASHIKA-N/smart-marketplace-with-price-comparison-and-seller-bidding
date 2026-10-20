@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import {
   QueryClient,
   QueryClientProvider,
@@ -45,11 +45,32 @@ function Session({ children }: { children: ReactNode }) {
     staleTime: 5 * 60000,
   });
   const [toast, setToast] = useState("");
-  const [location, setLocation] = useState({
+  const [location, setLocationState] = useState({
     lat: 13.0418,
     lng: 80.2341,
     name: "T. Nagar, Chennai",
   });
+  const setLocation = (v: { lat: number; lng: number; name: string }) => {
+    setLocationState(v);
+    try {
+      localStorage.setItem("aroundly_location", JSON.stringify(v));
+    } catch {
+      // Ignore localStorage write errors
+    }
+  };
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("aroundly_location");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.lat === "number" && typeof parsed.lng === "number" && parsed.name) {
+          setLocationState(parsed);
+        }
+      }
+    } catch {
+      // Ignore localStorage read or JSON parse errors
+    }
+  }, []);
   const showToast = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(""), 4500);

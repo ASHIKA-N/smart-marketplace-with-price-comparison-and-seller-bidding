@@ -6,7 +6,7 @@ test("homepage, search, comparison, and responsive navigation", async ({
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: /Great finds/ }),
+    page.getByRole("heading", { name: /Shop Smarter/ }),
   ).toBeVisible();
   await expect(page.locator(".product-card").first()).toBeVisible();
   await page.evaluate(async () => {
@@ -55,7 +55,7 @@ test("buyer can log in, save a product, and reserve it", async ({ page }) => {
   await page.getByLabel("Password", { exact: true }).fill("DemoPass123!");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: /Great finds/ }),
+    page.getByRole("heading", { name: /Shop Smarter/ }),
   ).toBeVisible();
   await page.goto("/products/sony-headphones");
   await expect(
@@ -171,6 +171,22 @@ test("API enforces ownership, stock, transitions, reviews, and refresh rotation"
       await request.patch(`${base}/transactions/${t.id}`, {
         headers: sellerHeaders,
         data: { status: "COMPLETED" },
+      })
+    ).status(),
+  ).toBe(400);
+  expect(
+    (
+      await request.patch(`${base}/transactions/${t.id}`, {
+        headers: sellerHeaders,
+        data: { status: "COMPLETED", otp: "000000" },
+      })
+    ).status(),
+  ).toBe(400);
+  expect(
+    (
+      await request.patch(`${base}/transactions/${t.id}`, {
+        headers: sellerHeaders,
+        data: { status: "COMPLETED", otp: t.pickupOtp },
       })
     ).ok(),
   ).toBeTruthy();
@@ -294,7 +310,7 @@ test("seller can edit stock and prices through the dashboard", async ({
   await page.getByLabel("Password", { exact: true }).fill("DemoPass123!");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: /Great finds/ }),
+    page.getByRole("heading", { name: /Shop Smarter/ }),
   ).toBeVisible();
   await page.goto("/seller/listings");
   await expect(
@@ -440,8 +456,11 @@ test("separate shopkeeper login opens reservation management", async ({
   await expect(card.locator(".badge")).toHaveText("confirmed");
   await card.getByRole("button", { name: "Mark picked up & paid" }).click();
   await page
+    .getByLabel("Customer Pickup OTP (6 digits)")
+    .fill(reservation.pickupOtp);
+  await page
     .getByRole("dialog")
-    .getByRole("button", { name: "Confirm update" })
+    .getByRole("button", { name: "Verify OTP & Complete" })
     .click();
   await expect(card.locator(".badge")).toHaveText("completed");
 });

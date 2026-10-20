@@ -63,7 +63,7 @@ function SectionHeading({
   );
 }
 export function Home() {
-  const { location } = useLocation();
+  const { location, setLocation } = useLocation();
   const params = `lat=${location.lat}&lng=${location.lng}`;
   const products = useQuery({
     queryKey: ["products", params],
@@ -74,42 +74,50 @@ export function Home() {
     queryKey: ["shops", params],
     queryFn: () => api<Shop[]>(`/shops?${params}`),
   });
+
+  const popularAreas = [
+    { name: "T. Nagar, Chennai", lat: 13.0418, lng: 80.2341 },
+    { name: "Anna Nagar, Chennai", lat: 13.085, lng: 80.2101 },
+    { name: "Adyar, Chennai", lat: 13.0067, lng: 80.2206 },
+    { name: "Indiranagar, Bengaluru", lat: 12.9719, lng: 77.6412 },
+    { name: "Koramangala, Bengaluru", lat: 12.9352, lng: 77.6245 },
+  ];
+
   return (
     <>
       <div className="container">
         <section className="hero">
           <div className="hero-copy">
             <div className="hero-label">
-              <span /> YOUR NEIGHBOURHOOD. REIMAGINED.
+              <span /> HYPERLOCAL PRICE COMPARISON & BIDDING
             </div>
             <h1>
-              Great finds.
+              Shop Smarter.
               <br />
-              Better prices.
+              Spend Less.
               <br />
-              <span>Closer to home.</span>
+              <span>Stay Local.</span>
             </h1>
             <p>
-              Discover the best of your neighbourhood.
-              <br className="desktop-only" /> Compare local prices. Shop with
-              confidence.
+              Compare real-time prices across neighbourhood shops, discover verified local sellers, and reserve for pickup with zero advance payment.
             </p>
             <form action="/search" className="hero-search">
               <Search size={20} />
               <input
                 name="q"
                 aria-label="Find a product nearby"
-                placeholder="What are you looking for?"
+                placeholder="Search products (Sony, Nike...), brands, or categories..."
               />
               <button type="submit" aria-label="Search nearby products">
                 <ArrowRight size={20} />
               </button>
             </form>
             <div className="hero-trending">
-              <span>Trending:</span>
+              <span>Popular searches:</span>
               <Link href="/search?q=headphones">Headphones</Link>
-              <Link href="/search?q=coffee">Artisan coffee</Link>
-              <Link href="/search?q=decor">Home décor</Link>
+              <Link href="/search?q=sneakers">Sneakers</Link>
+              <Link href="/search?q=coffee">Filter coffee</Link>
+              <Link href="/search?q=mug">Ceramics</Link>
             </div>
             <div className="hero-social">
               <div className="mini-avatars">
@@ -120,7 +128,7 @@ export function Home() {
               </div>
               <div>
                 <div className="stars">★★★★★</div>
-                <small>Good things happen when you shop local.</small>
+                <small>Over 800+ neighbours shopping locally each month.</small>
               </div>
             </div>
           </div>
@@ -182,39 +190,60 @@ export function Home() {
             </div>
           </div>
         </section>
-        <div className="benefit-strip">
-          <div>
-            <MapPin />
+        <div className="hero-location-banner">
+          <div className="hero-loc-info">
+            <MapPin size={18} />
             <span>
-              <strong>Closer than you think</strong>
-              <small>Find great shops in your neighbourhood</small>
+              Prices & availability shown for <strong>{location.name}</strong>
             </span>
           </div>
+          <div className="hero-loc-pills">
+            {popularAreas.map((area) => (
+              <button
+                key={area.name}
+                type="button"
+                className={`hero-loc-pill ${location.name === area.name ? "active" : ""}`}
+                onClick={() => setLocation({ lat: area.lat, lng: area.lng, name: area.name })}
+              >
+                {area.name.split(",")[0]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="benefit-strip">
           <div>
             <SlidersHorizontal />
             <span>
-              <strong>Compare. Save. Smile.</strong>
-              <small>The right product at the right price</small>
-            </span>
-          </div>
-          <div>
-            <ShieldCheck />
-            <span>
-              <strong>Local shops you can trust</strong>
-              <small>Transparent ratings and verified reviews</small>
+              <strong>Compare Local Prices</strong>
+              <small>Real-time price comparison for the exact same products across stores</small>
             </span>
           </div>
           <div>
             <Store />
             <span>
-              <strong>Make local matter</strong>
-              <small>Every purchase supports your community</small>
+              <strong>Discover Nearby Sellers</strong>
+              <small>Explore verified independent merchants and local storefronts</small>
+            </span>
+          </div>
+          <div>
+            <ShieldCheck />
+            <span>
+              <strong>Make Pickup Reservations</strong>
+              <small>Reserve items with secure OTP; inspect and pay only at the counter</small>
+            </span>
+          </div>
+          <div>
+            <Sparkles />
+            <span>
+              <strong>Submit Price Offers</strong>
+              <small>Negotiate directly with local sellers through transparent bidding</small>
             </span>
           </div>
         </div>
         <section className="section category-section">
           <SectionHeading
-            title="What’s on your list?"
+            title="Browse by Category"
+            description="Explore verified products available from nearby stores"
             href="/search"
             label="Explore all categories"
           />
@@ -236,9 +265,9 @@ export function Home() {
         </section>
         <section className="section">
           <SectionHeading
-            eyebrow="GOOD FINDS, GREAT PRICES"
-            title="Popular around you"
-            description="Neighbourhood favourites. Worth a closer look."
+            eyebrow="COMPARE & SAVE"
+            title="Best Prices Near You"
+            description="Neighbourhood rates updated in real-time. Compare nearby sellers before you buy."
             href="/search"
             label="Explore all products"
           />
@@ -323,8 +352,8 @@ export function Home() {
         <section className="section">
           <SectionHeading
             eyebrow="MEET YOUR NEIGHBOURS"
-            title="Good shops. Even better people."
-            description="Discover the independent stores that make your neighbourhood, yours."
+            title="Shops in Your Neighbourhood"
+            description="Discover the independent stores and verified local merchants near you."
             href="/shops"
             label="Find nearby shops"
           />

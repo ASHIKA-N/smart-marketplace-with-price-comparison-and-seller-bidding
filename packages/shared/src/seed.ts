@@ -439,5 +439,6 @@ export function createSeed(): Store {
     requests: [],
     bids: [],
     audits: [],
+    listingBids: [],
   };
 }

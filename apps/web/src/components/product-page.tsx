@@ -47,7 +47,49 @@ export function ProductPage({
   const [selected, setSelected] = useState<ListingResult | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [requestOpen, setRequestOpen] = useState(false);
+  const [bidOpen, setBidOpen] = useState(false);
+  const [bidListing, setBidListing] = useState<ListingResult | null>(null);
   const [sort, setSort] = useState("price");
+  const [editingReview, setEditingReview] = useState<Review | null>(null);
+  const [editRating, setEditRating] = useState(5);
+  const [editText, setEditText] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingReview) return;
+    setSavingEdit(true);
+    try {
+      await api(`/reviews/${editingReview.id}`, {
+        method: "PATCH",
+        body: { rating: editRating, text: editText },
+      });
+      await cache.invalidateQueries();
+      toast("Your review has been updated.");
+      setEditingReview(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to update review.";
+      toast(msg);
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleDeleteReview(reviewId: string) {
+    if (!confirm("Are you sure you want to delete your review?")) return;
+    setDeletingId(reviewId);
+    try {
+      await api(`/reviews/${reviewId}`, { method: "DELETE" });
+      await cache.invalidateQueries();
+      toast("Your review has been deleted.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to delete review.";
+      toast(msg);
+    } finally {
+      setDeletingId(null);
+    }
+  }
   const {
     data: p,
     isPending,
@@ -79,6 +121,14 @@ export function ProductPage({
       router.push("/requests");
     },
   });
+  const placeBid = useMutation({
+    mutationFn: (body: unknown) => api("/listing-bids", { method: "POST", body }),
+    onSuccess: () => {
+      setBidOpen(false);
+      void cache.invalidateQueries();
+      toast("Bid submitted! The seller will review your offer.");
+    },
+  });
   if (isPending)
     return (
       <div className="container section">
@@ -92,9 +142,15 @@ export function ProductPage({
       ? (a.shop.distance || 0) - (b.shop.distance || 0)
       : sort === "rating"
         ? b.shop.rating - a.shop.rating
-        : a.finalPrice - b.finalPrice,
+        : sort === "availability"
+          ? b.stock - a.stock
+          : a.finalPrice - b.finalPrice,
   );
-  const best = p.listings[0];
+  const validInStockListings = p.listings.filter((l) => l.stock > 0);
+  const cheapestListing = validInStockListings.length > 0
+    ? validInStockListings.reduce((min, cur) => cur.finalPrice < min.finalPrice ? cur : min, validInStockListings[0])
+    : p.listings[0];
+  const best = cheapestListing;
   return (
     <div className="container page-body">
       <div className="breadcrumb">
@@ -198,7 +254,7 @@ export function ProductPage({
         </div>
         <select
           className="control"
-          style={{ width: 155 }}
+          style={{ width: 175 }}
           aria-label="Sort sellers"
           value={sort}
           onChange={(e) => setSort(e.target.value)}
@@ -206,6 +262,7 @@ export function ProductPage({
           <option value="price">Lowest price</option>
           <option value="nearest">Nearest shop</option>
           <option value="rating">Highest rated</option>
+          <option value="availability">Stock availability</option>
         </select>
       </div>
       {listings.length ? (
@@ -213,12 +270,12 @@ export function ProductPage({
           <table className="comparison-table">
             <thead>
               <tr>
-                <th>Local seller</th>
-                <th>Distance</th>
+                <th>Local seller & address</th>
+                <th>Distance (straight line)</th>
                 <th>Shop rating</th>
                 <th>Availability</th>
-                <th>Estimated price</th>
-                <th />
+                <th>Price & savings</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -228,20 +285,24 @@ export function ProductPage({
                     <div className="shop-cell">
                       <Image src={l.shop.image} alt="" width={42} height={42} />
                       <div>
-                        <Link href={`/shops/${l.shop.id}`}>{l.shop.name}</Link>
-                        <small>
-                          {l.shop.isOpen ? "Open now" : "Currently closed"} ·
-                          Trust {l.shop.trust}/100
+                        <Link href={`/shops/${l.shop.id}`} style={{ fontWeight: 600 }}>{l.shop.name}</Link>
+                        <small className="muted" style={{ display: "block", marginTop: "2px", color: "var(--muted)" }}>
+                          {l.shop.address}
+                        </small>
+                        <small style={{ display: "block", marginTop: "2px" }}>
+                          <span style={{ color: l.shop.isOpen ? "#15803d" : "#b91c1c", fontWeight: 600 }}>
+                            {l.shop.isOpen ? "Open now" : "Currently closed"}
+                          </span> · Trust {l.shop.trust}/100
                         </small>
                         {l.id === best?.id && (
-                          <span className="badge" style={{ marginTop: 6 }}>
-                            Lowest price
+                          <span className="badge" style={{ marginTop: 6, background: "rgba(232, 244, 240, 0.95)", color: "var(--green)", border: "1px solid rgba(23, 107, 82, 0.2)" }}>
+                            Best Price Nearby
                           </span>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td>{l.shop.distance != null ? `${l.shop.distance.toFixed(1)} km` : "—"}</td>
+                  <td>{l.shop.distance != null ? `${l.shop.distance.toFixed(1)} km (straight line)` : "—"}</td>
                   <td>
                     <span className="rating">
                       <Star size={12} fill="currentColor" />
@@ -275,21 +336,44 @@ export function ProductPage({
                     )}
                   </td>
                   <td>
-                    <Button
-                      size="sm"
-                      disabled={!l.stock || authLoading}
-                      onClick={() => {
-                        if (!user) {
-                          router.push("/login");
-                          return;
-                        }
-                        setQuantity(1);
-                        reserve.reset();
-                        setSelected(l);
-                      }}
-                    >
-                      Reserve <ArrowRight size={13} />
-                    </Button>
+                    {l.pricingMode === "BIDDING" ? (
+                      <>
+                        <span className="badge amber" style={{ display: "block", marginBottom: 4 }}>Accepting Bids</span>
+                        {l.minBid && <small className="muted" style={{ display: "block", marginBottom: 4 }}>Min bid: {money(l.minBid)}</small>}
+                        {l.biddingDeadline && <small className="muted" style={{ display: "block", marginBottom: 4 }}>Deadline: {new Date(l.biddingDeadline).toLocaleDateString()}</small>}
+                        <Button
+                          size="sm"
+                          disabled={!l.stock || authLoading || l.biddingOpen === false}
+                          onClick={() => {
+                            if (!user) {
+                              router.push("/login");
+                              return;
+                            }
+                            placeBid.reset();
+                            setBidListing(l);
+                            setBidOpen(true);
+                          }}
+                        >
+                          Place Bid <MessageSquare size={13} />
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        disabled={!l.stock || authLoading}
+                        onClick={() => {
+                          if (!user) {
+                            router.push("/login");
+                            return;
+                          }
+                          setQuantity(1);
+                          reserve.reset();
+                          setSelected(l);
+                        }}
+                      >
+                        Reserve <ArrowRight size={13} />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -309,30 +393,74 @@ export function ProductPage({
           Payment happens at the shop; no online payment is collected.
         </span>
       </div>
-      <h2 className="section-title">From the neighbourhood</h2>
+      <h2 className="section-title">
+        From the neighbourhood · {p.rating.toFixed(1)}/5 ({p.reviews.length} {p.reviews.length === 1 ? "review" : "reviews"})
+      </h2>
       {Array.isArray(p.reviews) && p.reviews.length ? (
         <div className="review-list">
           {p.reviews.map((r) => (
             <div className="review-card" key={r.id}>
-              <div className="row spread">
-                <span className="rating">
-                  <Star fill="currentColor" size={14} />
-                  {r.rating}.0
-                </span>
-                <span className="badge">
-                  <BadgeCheck size={12} />
-                  Verified purchase
-                </span>
+              <div className="row spread" style={{ alignItems: "flex-start" }}>
+                <div>
+                  <div className="row" style={{ gap: "8px", alignItems: "center" }}>
+                    <span className="rating">
+                      <Star fill="currentColor" size={14} />
+                      {r.rating}.0
+                    </span>
+                    <strong>{r.userName || "Verified Buyer"}</strong>
+                    <span className="badge">
+                      <BadgeCheck size={12} />
+                      Verified purchase
+                    </span>
+                  </div>
+                  <small className="muted" style={{ display: "block", marginTop: "4px" }}>
+                    {new Date(r.createdAt).toLocaleDateString()}
+                    {r.updatedAt ? " (edited)" : ""}
+                  </small>
+                </div>
+                {user?.id === r.userId && (
+                  <div className="row" style={{ gap: "6px" }}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingReview(r);
+                        setEditRating(r.rating);
+                        setEditText(r.text);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={deletingId === r.id}
+                      onClick={() => void handleDeleteReview(r.id)}
+                    >
+                      {deletingId === r.id ? "Deleting…" : "Delete"}
+                    </Button>
+                  </div>
+                )}
               </div>
-              <p>{r.text}</p>
-              <small>{new Date(r.createdAt).toLocaleDateString()}</small>
+              <p style={{ marginTop: "10px" }}>{r.text}</p>
+              {r.reply && (
+                <div style={{ marginTop: "10px", padding: "8px 12px", background: "var(--surface-muted, #f3f4f6)", borderRadius: "6px", borderLeft: "3px solid var(--accent, #059669)" }}>
+                  <strong style={{ fontSize: "12px", display: "block" }}>Seller response:</strong>
+                  <p style={{ margin: "2px 0 0", fontSize: "13px" }}>{r.reply}</p>
+                  {r.repliedAt && (
+                    <small className="muted" style={{ fontSize: "11px" }}>
+                      {new Date(r.repliedAt).toLocaleDateString()}
+                    </small>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
       ) : (
         <p className="muted">
           Be the first to share your experience after a completed purchase.
-          Sample aggregate ratings are shown for demo products.
+          Reviews from verified neighbours will appear here.
         </p>
       )}
       <Dialog
@@ -445,6 +573,79 @@ export function ProductPage({
           <Button disabled={request.isPending}>
             {request.isPending ? "Sending…" : "Send price request"}
             <ArrowRight size={16} />
+          </Button>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={bidOpen}
+        onOpenChange={setBidOpen}
+        title="Submit your offer"
+        description="The seller will review and accept or reject your bid."
+      >
+        <form className="stack" onSubmit={(e) => {
+          e.preventDefault();
+          const f = new FormData(e.currentTarget);
+          placeBid.mutate({
+            listingId: bidListing?.id,
+            offeredPrice: Number(f.get("offeredPrice")),
+            quantity: Number(f.get("quantity")),
+            note: f.get("note"),
+          });
+        }}>
+          {bidListing?.minBid && (
+            <p className="muted">Minimum bid: {money(bidListing.minBid)}</p>
+          )}
+          <label className="field">
+            Your offer (₹)
+            <input name="offeredPrice" type="number" min={bidListing?.minBid ?? 0.01} step="0.01" max="10000000" required defaultValue={bidListing?.price} />
+          </label>
+          <label className="field">
+            Quantity{bidListing?.unit ? ` (${bidListing.unit})` : ""}
+            <input name="quantity" type="number" min={1} max={bidListing?.stock ?? 100} required defaultValue={1} />
+          </label>
+          <label className="field">
+            Note (optional)
+            <textarea name="note" maxLength={500} placeholder="Any special requests or questions…" />
+          </label>
+          {!user && <p className="form-error">Please sign in to submit a bid.</p>}
+          {placeBid.error && <p className="form-error">{(placeBid.error as Error).message}</p>}
+          <Button disabled={placeBid.isPending || !user}>
+            {placeBid.isPending ? "Submitting…" : "Submit bid"}
+          </Button>
+        </form>
+      </Dialog>
+      <Dialog
+        open={!!editingReview}
+        onOpenChange={(v) => { if (!v) setEditingReview(null); }}
+        title="Edit your review"
+        description="Update your star rating or review text for this product."
+      >
+        <form className="stack" onSubmit={handleSaveEdit}>
+          <div className="review-stars">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                type="button"
+                key={n}
+                className={n <= editRating ? "active" : ""}
+                onClick={() => setEditRating(n)}
+                aria-label={`${n} stars`}
+              >
+                ★
+              </button>
+            ))}
+          </div>
+          <textarea
+            required
+            minLength={5}
+            maxLength={2000}
+            rows={4}
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            placeholder="Share your experience…"
+          />
+          <Button disabled={savingEdit}>
+            {savingEdit ? "Saving…" : "Save changes"}
           </Button>
         </form>
       </Dialog>

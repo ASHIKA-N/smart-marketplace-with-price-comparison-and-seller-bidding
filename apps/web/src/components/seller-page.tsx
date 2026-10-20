@@ -15,6 +15,7 @@ import {
   TrendingUp,
   ShieldCheck,
   Pencil,
+  Star,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useToast } from "./providers";
@@ -37,6 +38,10 @@ import {
   type Transaction,
   type BidRequest,
   type Bid,
+  type ListingBid,
+  type Review,
+  POPULAR_LOCATIONS,
+  isValidCoordinate,
 } from "../../../../packages/shared/src";
 type Dashboard = {
   shops: Shop[];
@@ -46,6 +51,8 @@ type Dashboard = {
   transactions: Transaction[];
   requests: BidRequest[];
   bids: Bid[];
+  listingBids: ListingBid[];
+  reviews?: (Review & { product?: Product; shop?: Shop })[];
 };
 const navigation = [
   { path: "", label: "Overview", icon: LayoutDashboard },
@@ -54,6 +61,8 @@ const navigation = [
   { path: "/products", label: "Product catalog", icon: Tags },
   { path: "/offers", label: "Offers", icon: TrendingUp },
   { path: "/transactions", label: "Reservations", icon: ShoppingBag },
+  { path: "/listing-bids", label: "Incoming Bids", icon: MessageSquare },
+  { path: "/reviews", label: "Customer reviews", icon: Star },
   { path: "/bids", label: "Buyer requests", icon: MessageSquare },
 ];
 export function SellerPage({ tab = "" }: { tab?: string }) {
@@ -121,6 +130,10 @@ function DashboardPage({ tab }: { tab: string }) {
                   href="/seller/shop"
                   label="Create your shop"
                 />
+              ) : tab === "listing-bids" ? (
+                <IncomingBidsPanel data={data} />
+              ) : tab === "reviews" ? (
+                <ReviewsPanel data={data} />
               ) : tab === "listings" ? (
                 <ListingsEditor data={data} />
               ) : tab === "offers" ? (
@@ -149,13 +162,43 @@ function Overview({ data: d }: { data: Dashboard }) {
       icon: Package,
     },
     {
+      label: "Fixed-price listings",
+      value: d.listings.filter(l => (l.pricingMode ?? "FIXED") === "FIXED").length,
+      note: "Listings with a set price",
+      icon: Tags,
+    },
+    {
+      label: "Active listings",
+      value: d.listings.filter((l) => l.active).length,
+      note: `${d.listings.filter((l) => l.active && l.stock < 5).length} low on stock`,
+      icon: Package,
+    },
+    {
+      label: "Available inventory",
+      value: `${d.listings.filter((l) => l.active).reduce((sum, l) => sum + (l.stock || 0), 0)} pcs`,
+      note: "Total stock units across listings",
+      icon: Tags,
+    },
+    {
+      label: "Pending reservations",
+      value: d.transactions.filter((t) => ["INITIATED", "CONFIRMED"].includes(t.status)).length,
+      note: "Pickup orders waiting fulfillment",
+      icon: ShoppingBag,
+    },
+    {
+      label: "Pending bids",
+      value: (d.listingBids ?? []).filter((b) => b.status === "PENDING").length,
+      note: "Awaiting your decision",
+      icon: MessageSquare,
+    },
+    {
       label: "Completed sales",
       value: completed.length,
       note: "From this account’s reservations",
       icon: ShoppingBag,
     },
     {
-      label: "Sales value",
+      label: "Sales revenue",
       value: money(completed.reduce((sum, t) => sum + t.total, 0)),
       note: "Completed reservations only",
       icon: TrendingUp,
@@ -163,10 +206,13 @@ function Overview({ data: d }: { data: Dashboard }) {
     {
       label: "Shop trust",
       value: `${d.shops[0]?.trust || 0}/100`,
-      note: "Built through great experiences",
+      note: "Built through verified experiences",
       icon: ShieldCheck,
     },
   ];
+  const recentTransactions = d.transactions.slice().reverse().slice(0, 5);
+  const recentBids = (d.listingBids ?? []).slice().reverse().slice(0, 5);
+
   return (
     <>
       <div className="stat-grid">
@@ -183,40 +229,102 @@ function Overview({ data: d }: { data: Dashboard }) {
       </div>
       <div className="two-columns">
         <div className="panel">
-          <h2>Make a good first impression.</h2>
-          <p className="muted">
-            An up-to-date storefront gives your neighbours more reasons to stop
-            by.
+          <h2>Recent Activity</h2>
+          <p className="muted" style={{ marginBottom: "14px" }}>
+            Latest orders and buyer interactions across your storefronts.
           </p>
-          <div className="stack">
-            <Link className="text-link" href="/seller/shop">
-              Edit your shop profile →
-            </Link>
-            <Link className="text-link" href="/seller/listings">
-              Add products and update stock →
-            </Link>
-            <Link className="text-link" href="/seller/offers">
-              Create a neighbourhood offer →
-            </Link>
-          </div>
+          {recentTransactions.length === 0 && recentBids.length === 0 ? (
+            <p className="muted">No recent activity recorded yet.</p>
+          ) : (
+            <div className="stack" style={{ gap: "10px" }}>
+              {recentTransactions.map((t) => {
+                const prod = d.products.find((p) => p.id === t.productId);
+                return (
+                  <div
+                    key={t.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "8px 12px",
+                      background: "var(--light)",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <div>
+                      <strong>Reservation #{t.id.slice(0, 6)}</strong> ·{" "}
+                      <span>{prod?.name || "Product"} (Qty: {t.quantity})</span>
+                    </div>
+                    <span
+                      className={`badge ${t.status === "COMPLETED" ? "green" : t.status === "CANCELLED" ? "gray" : "amber"}`}
+                      style={{ fontSize: "10px" }}
+                    >
+                      {t.status}
+                    </span>
+                  </div>
+                );
+              })}
+              {recentBids.map((b) => {
+                const prod = d.products.find((p) => p.id === b.productId);
+                return (
+                  <div
+                    key={b.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "8px 12px",
+                      background: "var(--light)",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <div>
+                      <strong>Buyer Offer</strong> ·{" "}
+                      <span>{prod?.name || "Item"} at {money(b.offeredPrice)}</span>
+                    </div>
+                    <span
+                      className={`badge ${b.status === "ACCEPTED" ? "green" : b.status === "REJECTED" ? "gray" : "amber"}`}
+                      style={{ fontSize: "10px" }}
+                    >
+                      {b.status}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div className="panel">
-          <h2>Your next opportunities</h2>
-          <div className="stack">
-            <p className="muted">
-              <strong>
-                {d.transactions.filter((t) => t.status === "INITIATED").length}
-              </strong>{" "}
-              reservations waiting for confirmation.
+          <h2>Storefront Management</h2>
+          <p className="muted" style={{ marginBottom: "12px" }}>
+            An up-to-date storefront gives your neighbours more reasons to stop by.
+          </p>
+          <div className="stack" style={{ marginBottom: "16px" }}>
+            <Link className="text-link" href="/seller/shop">
+              Edit your shop profile & coordinates →
+            </Link>
+            <Link className="text-link" href="/seller/listings">
+              Add products & configure Fixed/Bidding pricing →
+            </Link>
+            <Link className="text-link" href="/seller/listing-bids">
+              Review and accept/reject buyer bids →
+            </Link>
+            <Link className="text-link" href="/seller/reviews">
+              View customer ratings & post replies →
+            </Link>
+          </div>
+          <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
+            <p className="muted" style={{ marginBottom: "6px" }}>
+              <strong>{d.transactions.filter((t) => t.status === "INITIATED").length}</strong> reservations waiting for confirmation.
             </p>
-            <p className="muted">
-              <strong>{d.requests.length}</strong> open price requests from
-              buyers.
+            <p className="muted" style={{ marginBottom: "10px" }}>
+              <strong>{d.requests.length}</strong> open price requests from buyers.
             </p>
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" size="sm">
               <Link href="/seller/bids">
-                Explore buyer requests
-                <ArrowRight size={15} />
+                Explore buyer requests <ArrowRight size={14} />
               </Link>
             </Button>
           </div>
@@ -249,6 +357,38 @@ function ShopEditor({ data }: { data: Dashboard }) {
   const [id, setId] = useState(data.shops[0]?.id || "");
   const shop = data.shops.find((s) => s.id === id);
   const save = useSave(id ? `/shops/${id}` : "/shops", id ? "PATCH" : "POST");
+  const toast = useToast();
+  const [shopLat, setShopLat] = useState<number | string>(shop?.lat ?? 12.9352);
+  const [shopLng, setShopLng] = useState<number | string>(shop?.lng ?? 77.6245);
+  const [address, setAddress] = useState(shop?.address || "");
+  const [lastResolvedAddress, setLastResolvedAddress] = useState(shop?.address || "");
+  const [resolving, setResolving] = useState(false);
+
+  async function resolveAddress() {
+    if (!address || address.trim().length < 3) {
+      toast("Please enter a valid shop address to resolve coordinates.");
+      return;
+    }
+    setResolving(true);
+    try {
+      const res = await api<{ results: { name: string; lat: number; lng: number; displayName: string }[] }>(
+        `/geocode?q=${encodeURIComponent(address.trim())}`
+      );
+      if (res.results && res.results.length > 0) {
+        const match = res.results[0];
+        setShopLat(match.lat);
+        setShopLng(match.lng);
+        setLastResolvedAddress(address);
+        toast(`Resolved coordinates: ${match.displayName}`);
+      } else {
+        toast("Could not automatically resolve address. Please check spelling or enter coordinates manually.");
+      }
+    } catch {
+      toast("Geocoding service unavailable. Please enter coordinates manually.");
+    } finally {
+      setResolving(false);
+    }
+  }
   return (
     <section className="panel">
       <div className="row spread">
@@ -261,7 +401,13 @@ function ShopEditor({ data }: { data: Dashboard }) {
             style={{ width: 180 }}
             value={id}
             onChange={(e) => {
-              setId(e.target.value);
+              const newId = e.target.value;
+              setId(newId);
+              const found = data.shops.find((s) => s.id === newId);
+              setShopLat(found?.lat ?? 12.9352);
+              setShopLng(found?.lng ?? 77.6245);
+              setAddress(found?.address || "");
+              setLastResolvedAddress(found?.address || "");
               save.reset();
             }}
           >
@@ -280,13 +426,19 @@ function ShopEditor({ data }: { data: Dashboard }) {
         onSubmit={(e) => {
           e.preventDefault();
           const f = new FormData(e.currentTarget);
+          const latNum = Number(f.get("lat"));
+          const lngNum = Number(f.get("lng"));
+          if (!isValidCoordinate(latNum, lngNum)) {
+            toast("Coordinates must be valid numbers (Latitude -90 to 90, Longitude -180 to 180).");
+            return;
+          }
           save.mutate({
             name: f.get("name"),
             description: f.get("description"),
             address: f.get("address"),
             phone: f.get("phone"),
-            lat: Number(f.get("lat")),
-            lng: Number(f.get("lng")),
+            lat: latNum,
+            lng: lngNum,
             image: f.get("image"),
             hours: {
               open: f.get("open"),
@@ -319,19 +471,88 @@ function ShopEditor({ data }: { data: Dashboard }) {
               placeholder="What makes your shop special?"
             />
           </label>
-          <label className="field full">
-            Address
-            <input
-              name="address"
-              required
-              minLength={5}
-              maxLength={300}
-              defaultValue={shop?.address}
-              placeholder="Street, neighbourhood, city"
-            />
-          </label>
+          <div className="field full">
+            <label style={{ display: "block", marginBottom: "6px" }}>
+              Address
+            </label>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <input
+                name="address"
+                required
+                minLength={5}
+                maxLength={300}
+                style={{ flex: 1, minWidth: "250px" }}
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Street, neighbourhood, city"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={resolving || !address.trim()}
+                onClick={() => void resolveAddress()}
+              >
+                {resolving ? "Resolving…" : "Resolve coordinates from address"}
+              </Button>
+            </div>
+            {address.trim() && lastResolvedAddress && address.trim() !== lastResolvedAddress.trim() && (
+              <small style={{ color: "var(--muted)", marginTop: "4px", display: "block" }}>
+                Address changed since last resolution. Click &quot;Resolve coordinates from address&quot; or check latitude/longitude below to prevent stale coordinates.
+              </small>
+            )}
+          </div>
+          <div className="field full">
+            Shop coordinates helper
+            <div className="row" style={{ gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+              <select
+                className="control"
+                style={{ width: "auto" }}
+                aria-label="Pick popular location preset"
+                onChange={(e) => {
+                  const found = POPULAR_LOCATIONS.find((n) => n.name === e.target.value);
+                  if (found) {
+                    setShopLat(found.lat);
+                    setShopLng(found.lng);
+                    setLastResolvedAddress(found.name);
+                    toast(`Coordinates set to ${found.name}`);
+                  }
+                }}
+                defaultValue=""
+              >
+                <option value="" disabled>Pick coordinates from popular locations…</option>
+                {POPULAR_LOCATIONS.map((n) => (
+                  <option key={n.name} value={n.name}>{n.name}</option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!navigator.geolocation) {
+                    toast("Geolocation is not supported by your browser.");
+                    return;
+                  }
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                      setShopLat(Number(pos.coords.latitude.toFixed(6)));
+                      setShopLng(Number(pos.coords.longitude.toFixed(6)));
+                      toast("Shop coordinates updated from device GPS.");
+                    },
+                    (err) => {
+                      toast(`Could not get device location: ${err.message}`);
+                    },
+                    { timeout: 10000 }
+                  );
+                }}
+              >
+                Use current device location
+              </Button>
+            </div>
+          </div>
           <label className="field">
-            Latitude
+            Latitude (-90 to 90)
             <input
               name="lat"
               type="number"
@@ -339,11 +560,12 @@ function ShopEditor({ data }: { data: Dashboard }) {
               required
               min={-90}
               max={90}
-              defaultValue={shop?.lat || 13.0418}
+              value={shopLat}
+              onChange={(e) => setShopLat(e.target.value)}
             />
           </label>
           <label className="field">
-            Longitude
+            Longitude (-180 to 180)
             <input
               name="lng"
               type="number"
@@ -351,7 +573,8 @@ function ShopEditor({ data }: { data: Dashboard }) {
               required
               min={-180}
               max={180}
-              defaultValue={shop?.lng || 80.2341}
+              value={shopLng}
+              onChange={(e) => setShopLng(e.target.value)}
             />
           </label>
           <label className="field full">
@@ -556,6 +779,7 @@ function ProductsEditor({ data }: { data: Dashboard }) {
 function ListingsEditor({ data: d }: { data: Dashboard }) {
   const [edit, setEdit] = useState<Listing | null>(null);
   const [open, setOpen] = useState(false);
+  const [pricingMode, setPricingMode] = useState<"FIXED" | "BIDDING">(edit?.pricingMode ?? "FIXED");
   const save = useSave(
     edit ? `/listings/${edit.id}` : "/listings",
     edit ? "PATCH" : "POST",
@@ -587,6 +811,8 @@ function ListingsEditor({ data: d }: { data: Dashboard }) {
                 <th>Product</th>
                 <th>Price</th>
                 <th>Stock</th>
+                <th>Mode</th>
+                <th>Unit</th>
                 <th>Status</th>
                 <th />
               </tr>
@@ -615,6 +841,12 @@ function ListingsEditor({ data: d }: { data: Dashboard }) {
                         {l.stock} units
                       </span>
                     </td>
+                    <td>
+                      <span className={`badge ${l.pricingMode === "BIDDING" ? "amber" : ""}`}>
+                        {l.pricingMode === "BIDDING" ? "Bidding" : "Fixed"}
+                      </span>
+                    </td>
+                    <td>{l.unit || "—"}</td>
                     <td>{l.active ? "Active" : "Hidden"}</td>
                     <td>
                       <Button
@@ -653,12 +885,20 @@ function ListingsEditor({ data: d }: { data: Dashboard }) {
           onSubmit={(e) => {
             e.preventDefault();
             const f = new FormData(e.currentTarget);
+            const pm = f.get("pricingMode") as "FIXED" | "BIDDING" || pricingMode;
             save.mutate({
               shopId: f.get("shopId"),
               productId: f.get("productId"),
               price: Number(f.get("price")),
               stock: Number(f.get("stock")),
               active: f.get("active") === "on",
+              pricingMode: pm,
+              unit: f.get("unit") || "",
+              minBid: pm === "BIDDING" && f.get("minBid") ? Number(f.get("minBid")) : undefined,
+              biddingDeadline: pm === "BIDDING" && f.get("biddingDeadline")
+                ? new Date(String(f.get("biddingDeadline"))).toISOString()
+                : undefined,
+              biddingOpen: pm === "BIDDING" ? f.get("biddingOpen") === "on" : true,
             });
           }}
         >
@@ -715,6 +955,43 @@ function ListingsEditor({ data: d }: { data: Dashboard }) {
             />
             Visible to buyers
           </label>
+          <div className="field full">
+            Pricing mode
+            <div className="row">
+              <label className="checkbox">
+                <input type="radio" name="pricingMode" value="FIXED"
+                  checked={pricingMode === "FIXED"} onChange={() => setPricingMode("FIXED")} />
+                Fixed Price — buyers pay your listed price
+              </label>
+              <label className="checkbox">
+                <input type="radio" name="pricingMode" value="BIDDING"
+                  checked={pricingMode === "BIDDING"} onChange={() => setPricingMode("BIDDING")} />
+                Price Bidding — buyers submit offers
+              </label>
+            </div>
+          </div>
+          <label className="field">
+            Unit of measurement
+            <input name="unit" maxLength={20} defaultValue={edit?.unit || ""} placeholder="kg, pcs, each, …" />
+          </label>
+          {pricingMode === "BIDDING" && (
+            <>
+              <div className="form-grid">
+                <label className="field">
+                  Minimum bid (₹)
+                  <input name="minBid" type="number" min="0.01" step="0.01" max="10000000" defaultValue={edit?.minBid} />
+                </label>
+                <label className="field">
+                  Bidding deadline (optional)
+                  <input name="biddingDeadline" type="datetime-local" defaultValue={edit?.biddingDeadline ? edit.biddingDeadline.slice(0,16) : ""} />
+                </label>
+              </div>
+              <label className="checkbox">
+                <input name="biddingOpen" type="checkbox" defaultChecked={edit?.biddingOpen !== false} />
+                Bidding is currently open
+              </label>
+            </>
+          )}
           {save.error && <p className="form-error">{save.error.message}</p>}
           <Button disabled={save.isPending}>Save listing</Button>
         </form>
@@ -859,9 +1136,11 @@ function SellerTransactions({ data: d }: { data: Dashboard }) {
     id: string;
     status: string;
   } | null>(null);
-  const save = useSave(`/transactions/${selected?.id}`, "PATCH", () =>
-    setSelected(null),
-  );
+  const [otpInput, setOtpInput] = useState("");
+  const save = useSave(`/transactions/${selected?.id}`, "PATCH", () => {
+    setSelected(null);
+    setOtpInput("");
+  });
   return (
     <>
       <h2 className="section-title">Customer reservations</h2>
@@ -891,6 +1170,7 @@ function SellerTransactions({ data: d }: { data: Dashboard }) {
                     size="sm"
                     onClick={() => {
                       save.reset();
+                      setOtpInput("");
                       setSelected({ id: t.id, status: "CONFIRMED" });
                     }}
                   >
@@ -902,6 +1182,7 @@ function SellerTransactions({ data: d }: { data: Dashboard }) {
                     size="sm"
                     onClick={() => {
                       save.reset();
+                      setOtpInput("");
                       setSelected({ id: t.id, status: "COMPLETED" });
                     }}
                   >
@@ -914,6 +1195,7 @@ function SellerTransactions({ data: d }: { data: Dashboard }) {
                     variant="outline"
                     onClick={() => {
                       save.reset();
+                      setOtpInput("");
                       setSelected({ id: t.id, status: "CANCELLED" });
                     }}
                   >
@@ -929,32 +1211,99 @@ function SellerTransactions({ data: d }: { data: Dashboard }) {
       <Dialog
         open={!!selected}
         onOpenChange={(v) => {
-          if (!v) setSelected(null);
+          if (!v) {
+            setSelected(null);
+            setOtpInput("");
+          }
         }}
         title={
           selected?.status === "COMPLETED"
-            ? "Has your neighbour picked up?"
+            ? "Confirm customer pickup"
             : selected?.status === "CANCELLED"
               ? "Cancel this reservation?"
               : "Ready for your neighbour?"
         }
         description={
           selected?.status === "COMPLETED"
-            ? "Confirm only after the buyer has collected and paid for their items. This enables a verified review."
+            ? "Ask the buyer for their 6-digit pickup OTP to verify the collection and payment."
             : selected?.status === "CANCELLED"
               ? "Reserved stock will be released and the buyer will be notified."
               : "Confirm the stock is ready for pickup. The buyer will receive an update."
         }
       >
         <div className="stack">
+          {selected?.status === "COMPLETED" && (
+            <div>
+              <label
+                htmlFor="pickup-otp-input"
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  marginBottom: "6px",
+                }}
+              >
+                Customer Pickup OTP (6 digits)
+              </label>
+              <input
+                id="pickup-otp-input"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                placeholder="Enter 6-digit OTP"
+                value={otpInput}
+                onChange={(e) =>
+                  setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  fontSize: "18px",
+                  letterSpacing: "4px",
+                  textAlign: "center",
+                  fontFamily: "monospace",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                }}
+                autoFocus
+              />
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "var(--text-muted, #64748b)",
+                  marginTop: "4px",
+                }}
+              >
+                Ask the customer for the 6-digit code shown on their reservation page.
+              </p>
+            </div>
+          )}
           {save.error && <p className="form-error">{save.error.message}</p>}
           <Button
-            disabled={save.isPending}
-            onClick={() => save.mutate({ status: selected?.status })}
+            disabled={
+              save.isPending ||
+              (selected?.status === "COMPLETED" && otpInput.trim().length !== 6)
+            }
+            onClick={() =>
+              save.mutate(
+                selected?.status === "COMPLETED"
+                  ? { status: selected.status, otp: otpInput.trim() }
+                  : { status: selected?.status },
+              )
+            }
           >
-            Confirm update
+            {selected?.status === "COMPLETED"
+              ? "Verify OTP & Complete"
+              : "Confirm update"}
           </Button>
-          <Button variant="outline" onClick={() => setSelected(null)}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSelected(null);
+              setOtpInput("");
+            }}
+          >
             Go back
           </Button>
         </div>
@@ -1055,6 +1404,245 @@ function BidsEditor({ data: d }: { data: Dashboard }) {
           <Button disabled={save.isPending}>Send your offer</Button>
         </form>
       </Dialog>
+    </>
+  );
+}
+function IncomingBidsPanel({ data: d }: { data: Dashboard }) {
+  const [filter, setFilter] = useState<"ALL" | "PENDING" | "ACCEPTED" | "REJECTED">("PENDING");
+  const cache = useQueryClient();
+  const toast = useToast();
+
+  const bids = (d.listingBids ?? []).filter(b => filter === "ALL" || b.status === filter);
+
+  const handleAccept = (bidId: string) => {
+    api(`/listing-bids/${bidId}/accept`, { method: "PATCH" })
+      .then(() => { void cache.invalidateQueries(); toast("Bid accepted!"); })
+      .catch((e: Error) => toast(e.message));
+  };
+  const handleReject = (bidId: string) => {
+    api(`/listing-bids/${bidId}/reject`, { method: "PATCH" })
+      .then(() => { void cache.invalidateQueries(); toast("Bid rejected."); })
+      .catch((e: Error) => toast(e.message));
+  };
+
+  return (
+    <>
+      <div className="section-heading">
+        <div>
+          <h2>Incoming bids</h2>
+          <p>Review offers from buyers on your bidding listings.</p>
+        </div>
+        <div className="row">
+          {(["ALL", "PENDING", "ACCEPTED", "REJECTED"] as const).map(f => (
+            <button key={f} className={`control ${filter === f ? "active" : ""}`}
+              onClick={() => setFilter(f)} style={{ marginRight: 4 }}>
+              {f === "ALL" ? "All" : f.charAt(0) + f.slice(1).toLowerCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+      {bids.length ? (
+        bids.slice().reverse().map(bid => {
+          const listing = d.listings.find(l => l.id === bid.listingId);
+          const product = d.products.find(p => p.id === bid.productId);
+          return (
+            <div className="panel mb" key={bid.id}>
+              <div className="row spread">
+                <div>
+                  <h3>{product?.name ?? bid.productId}</h3>
+                  <p className="muted">
+                    Offered {money(bid.offeredPrice)} · Qty {bid.quantity}{listing?.unit ? ` ${listing.unit}` : ""} · {new Date(bid.createdAt).toLocaleString()}
+                  </p>
+                  {bid.note && <p className="muted mt">{bid.note}</p>}
+                </div>
+                <span className={`badge ${bid.status === "ACCEPTED" ? "" : bid.status === "REJECTED" ? "amber" : ""}`}>
+                  {bid.status.charAt(0) + bid.status.slice(1).toLowerCase()}
+                </span>
+              </div>
+              {bid.status === "PENDING" && (
+                <div className="row mt">
+                  <Button size="sm" onClick={() => handleAccept(bid.id)}>Accept</Button>
+                  <Button size="sm" variant="outline" onClick={() => handleReject(bid.id)}>Reject</Button>
+                </div>
+              )}
+            </div>
+          );
+        })
+      ) : (
+        <p className="empty-small">
+          {filter === "PENDING"
+            ? "No pending bids. Buyers will see your bidding listings and submit offers."
+            : "No bids match this filter."}
+        </p>
+      )}
+    </>
+  );
+}
+
+function ReviewsPanel({ data: d }: { data: Dashboard }) {
+  const [filter, setFilter] = useState<"ALL" | "5" | "4" | "3" | "2" | "1" | "UNREPLIED">("ALL");
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [submittingReply, setSubmittingReply] = useState(false);
+  const cache = useQueryClient();
+  const toast = useToast();
+
+  const reviews = d.reviews || [];
+  const total = reviews.length;
+  const avgRating = total ? (reviews.reduce((sum, r) => sum + r.rating, 0) / total).toFixed(1) : "0.0";
+
+  const distribution = [5, 4, 3, 2, 1].map((stars) => {
+    const count = reviews.filter((r) => r.rating === stars).length;
+    const pct = total ? Math.round((count / total) * 100) : 0;
+    return { stars, count, pct };
+  });
+
+  const filtered = reviews.filter((r) => {
+    if (filter === "ALL") return true;
+    if (filter === "UNREPLIED") return !r.reply;
+    return r.rating === Number(filter);
+  });
+
+  async function handleSendReply(reviewId: string) {
+    if (!replyText.trim() || replyText.trim().length < 2) {
+      toast("Please enter a response of at least 2 characters.");
+      return;
+    }
+    setSubmittingReply(true);
+    try {
+      await api(`/reviews/${reviewId}/reply`, {
+        method: "POST",
+        body: { reply: replyText.trim() },
+      });
+      await cache.invalidateQueries();
+      toast("Your reply has been published.");
+      setReplyingTo(null);
+      setReplyText("");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to post reply.";
+      toast(msg);
+    } finally {
+      setSubmittingReply(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="section-heading">
+        <div>
+          <h2>Customer reviews &amp; ratings</h2>
+          <p>Feedback from verified neighbours who purchased at your shop.</p>
+        </div>
+      </div>
+      <div className="panel mb" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "20px", alignItems: "center" }}>
+        <div style={{ textAlign: "center", padding: "10px" }}>
+          <div style={{ fontSize: "40px", fontWeight: "bold", lineHeight: 1 }}>{avgRating}</div>
+          <div style={{ color: "#f59e0b", fontSize: "18px", margin: "6px 0" }}>
+            {"★".repeat(Math.round(Number(avgRating))) + "☆".repeat(5 - Math.round(Number(avgRating)))}
+          </div>
+          <p className="muted" style={{ margin: 0 }}>
+            {total === 1 ? "1 verified review" : `${total} verified reviews`}
+          </p>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          {distribution.map((d) => (
+            <div key={d.stars} style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px" }}>
+              <span style={{ width: "35px" }}>{d.stars} ★</span>
+              <div style={{ flex: 1, height: "8px", background: "var(--border, #e5e7eb)", borderRadius: "4px", overflow: "hidden" }}>
+                <div style={{ width: `${d.pct}%`, height: "100%", background: "#f59e0b" }} />
+              </div>
+              <span style={{ width: "30px", textAlign: "right", color: "var(--muted)" }}>{d.count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="row spread mb" style={{ alignItems: "center" }}>
+        <div className="row" style={{ flexWrap: "wrap", gap: "6px" }}>
+          {(["ALL", "5", "4", "3", "2", "1", "UNREPLIED"] as const).map((f) => (
+            <button
+              key={f}
+              className={`control ${filter === f ? "active" : ""}`}
+              onClick={() => setFilter(f)}
+              style={{ fontSize: "12px", padding: "4px 10px" }}
+            >
+              {f === "ALL" ? "All" : f === "UNREPLIED" ? "Needs reply" : `${f} Stars`}
+            </button>
+          ))}
+        </div>
+        <span className="muted" style={{ fontSize: "13px" }}>{filtered.length} shown</span>
+      </div>
+      {filtered.length > 0 ? (
+        filtered.slice().reverse().map((r) => (
+          <div className="panel mb" key={r.id}>
+            <div className="row spread" style={{ alignItems: "flex-start" }}>
+              <div>
+                <div className="row" style={{ gap: "8px", alignItems: "center" }}>
+                  <span style={{ color: "#f59e0b", fontWeight: "bold" }}>
+                    {"★".repeat(r.rating) + "☆".repeat(5 - r.rating)}
+                  </span>
+                  <strong>{r.userName || "Verified Buyer"}</strong>
+                  <span className="badge">Verified purchase</span>
+                </div>
+                <small className="muted" style={{ display: "block", marginTop: "4px" }}>
+                  {r.product ? `Product: ${r.product.name} · ` : ""}{new Date(r.createdAt).toLocaleDateString()}
+                  {r.updatedAt ? " (edited)" : ""}
+                </small>
+              </div>
+            </div>
+            <p style={{ marginTop: "12px", whiteSpace: "pre-wrap" }}>{r.text}</p>
+            {r.reply && (
+              <div style={{ marginTop: "12px", padding: "10px 14px", background: "var(--surface-muted, #f3f4f6)", borderRadius: "8px", borderLeft: "3px solid var(--accent, #059669)" }}>
+                <strong style={{ fontSize: "13px", display: "block" }}>Your response:</strong>
+                <p style={{ margin: "4px 0 0", fontSize: "14px" }}>{r.reply}</p>
+                {r.repliedAt && (
+                  <small className="muted" style={{ fontSize: "11px" }}>
+                    Replied on {new Date(r.repliedAt).toLocaleDateString()}
+                  </small>
+                )}
+              </div>
+            )}
+            <div className="row mt" style={{ gap: "8px" }}>
+              {replyingTo === r.id ? (
+                <div className="stack" style={{ width: "100%", marginTop: "8px" }}>
+                  <textarea
+                    rows={3}
+                    placeholder="Write a polite, professional reply to this customer…"
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    maxLength={1000}
+                    style={{ width: "100%", padding: "8px" }}
+                  />
+                  <div className="row" style={{ gap: "8px" }}>
+                    <Button size="sm" disabled={submittingReply} onClick={() => void handleSendReply(r.id)}>
+                      {submittingReply ? "Posting…" : "Post reply"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { setReplyingTo(null); setReplyText(""); }}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setReplyingTo(r.id);
+                    setReplyText(r.reply || "");
+                  }}
+                >
+                  {r.reply ? "Edit your reply" : "Reply to review"}
+                </Button>
+              )}
+            </div>
+          </div>
+        ))
+      ) : (
+        <p className="empty-small">
+          {total === 0
+            ? "No reviews yet. As customers complete reservations at your shop, their verified feedback will appear here."
+            : "No reviews match this filter."}
+        </p>
+      )}
     </>
   );
 }

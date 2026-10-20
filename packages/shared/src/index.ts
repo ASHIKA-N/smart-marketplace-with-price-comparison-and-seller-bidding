@@ -28,6 +28,10 @@ export interface Shop {
   address: string;
   lat: number;
   lng: number;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
   image: string;
   rating: number;
   reviews: number;
@@ -43,9 +47,27 @@ export interface Listing {
   id: string;
   productId: string;
   shopId: string;
-  price: number;
+  price: number;       // fixed price OR reference price for bidding
   stock: number;
   active: boolean;
+  pricingMode?: "FIXED" | "BIDDING";  // default FIXED if absent
+  minBid?: number;          // minimum bid amount (BIDDING mode)
+  biddingDeadline?: string | null; // ISO datetime, optional
+  biddingOpen?: boolean;    // if false, bidding closed
+  unit?: string;            // e.g. "kg", "pcs", "each"
+}
+export interface ListingBid {
+  id: string;
+  listingId: string;
+  productId: string;
+  shopId: string;
+  buyerId: string;
+  offeredPrice: number;
+  quantity: number;
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "WITHDRAWN" | "EXPIRED";
+  note: string;
+  createdAt: string;
+  updatedAt: string;
 }
 export interface Offer {
   id: string;
@@ -68,6 +90,8 @@ export interface Transaction {
   finalPrice: number;
   total: number;
   status: "INITIATED" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+  pickupOtp?: string;
+  completedAt?: string;
   createdAt: string;
 }
 export interface Review {
@@ -79,6 +103,10 @@ export interface Review {
   rating: number;
   text: string;
   createdAt: string;
+  updatedAt?: string;
+  userName?: string;
+  reply?: string;
+  repliedAt?: string;
 }
 export interface BidRequest {
   id: string;
@@ -131,6 +159,7 @@ export interface Store {
   requests: BidRequest[];
   bids: Bid[];
   audits: { id: string; actorId: string; action: string; createdAt: string }[];
+  listingBids: ListingBid[];
 }
 export interface ProductResult extends Product {
   price: number;
@@ -138,6 +167,7 @@ export interface ProductResult extends Product {
   sellerCount: number;
   distance: number;
   discount: number;
+  pricingMode?: "FIXED" | "BIDDING";
 }
 export interface ListingResult extends Listing {
   shop: Shop;
@@ -223,3 +253,84 @@ export const money = (n: number) =>
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(n);
+
+export function isValidCoordinate(lat: number, lng: number): boolean {
+  return (
+    typeof lat === "number" &&
+    !isNaN(lat) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    typeof lng === "number" &&
+    !isNaN(lng) &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
+export const CHENNAI_BOUNDS = {
+  minLat: 12.8,
+  maxLat: 13.3,
+  minLng: 80.0,
+  maxLng: 80.35,
+};
+
+export function isWithinChennai(lat: number, lng: number): boolean {
+  return (
+    lat >= CHENNAI_BOUNDS.minLat &&
+    lat <= CHENNAI_BOUNDS.maxLat &&
+    lng >= CHENNAI_BOUNDS.minLng &&
+    lng <= CHENNAI_BOUNDS.maxLng
+  );
+}
+
+export const POPULAR_LOCATIONS = [
+  // Bengaluru
+  { name: "Koramangala, Bengaluru", lat: 12.9352, lng: 77.6245, city: "Bengaluru" },
+  { name: "Indiranagar, Bengaluru", lat: 12.9784, lng: 77.6408, city: "Bengaluru" },
+  { name: "HSR Layout, Bengaluru", lat: 12.9121, lng: 77.6446, city: "Bengaluru" },
+  { name: "Whitefield, Bengaluru", lat: 12.9698, lng: 77.75, city: "Bengaluru" },
+  { name: "Jayanagar, Bengaluru", lat: 12.9308, lng: 77.5838, city: "Bengaluru" },
+  { name: "MG Road, Bengaluru", lat: 12.9756, lng: 77.6066, city: "Bengaluru" },
+  { name: "Bengaluru (Central)", lat: 12.9716, lng: 77.5946, city: "Bengaluru" },
+  // Chennai
+  { name: "T. Nagar, Chennai", lat: 13.0418, lng: 80.2341, city: "Chennai" },
+  { name: "Anna Nagar, Chennai", lat: 13.085, lng: 80.2101, city: "Chennai" },
+  { name: "Adyar, Chennai", lat: 13.0067, lng: 80.2206, city: "Chennai" },
+  { name: "Mylapore, Chennai", lat: 13.0368, lng: 80.2676, city: "Chennai" },
+  { name: "Velachery, Chennai", lat: 12.9815, lng: 80.218, city: "Chennai" },
+  { name: "OMR / Thoraipakkam, Chennai", lat: 12.9438, lng: 80.2366, city: "Chennai" },
+  // Mumbai
+  { name: "Bandra West, Mumbai", lat: 19.0596, lng: 72.8295, city: "Mumbai" },
+  { name: "Andheri West, Mumbai", lat: 19.1136, lng: 72.8697, city: "Mumbai" },
+  { name: "Colaba, Mumbai", lat: 18.9067, lng: 72.8147, city: "Mumbai" },
+  { name: "Powai, Mumbai", lat: 19.1176, lng: 72.906, city: "Mumbai" },
+  // Delhi NCR
+  { name: "Connaught Place, New Delhi", lat: 28.6304, lng: 77.2177, city: "Delhi" },
+  { name: "Hauz Khas, New Delhi", lat: 28.5494, lng: 77.2001, city: "Delhi" },
+  { name: "Cyber City, Gurugram", lat: 28.4952, lng: 77.0894, city: "Gurugram" },
+  // Hyderabad
+  { name: "HITEC City, Hyderabad", lat: 17.4435, lng: 78.3772, city: "Hyderabad" },
+  { name: "Banjara Hills, Hyderabad", lat: 17.4156, lng: 78.435, city: "Hyderabad" },
+  // Pune & Kolkata
+  { name: "Koregaon Park, Pune", lat: 18.5362, lng: 73.894, city: "Pune" },
+  { name: "Park Street, Kolkata", lat: 22.5516, lng: 88.3524, city: "Kolkata" },
+];
+
+export const CHENNAI_NEIGHBOURHOODS = [
+  { name: "T. Nagar, Chennai", lat: 13.0418, lng: 80.2341 },
+  { name: "Anna Nagar, Chennai", lat: 13.085, lng: 80.2101 },
+  { name: "Adyar, Chennai", lat: 13.0067, lng: 80.2206 },
+  { name: "Mylapore, Chennai", lat: 13.0368, lng: 80.2676 },
+  { name: "Velachery, Chennai", lat: 12.9815, lng: 80.218 },
+  { name: "Guindy, Chennai", lat: 13.0067, lng: 80.2025 },
+  { name: "Nungambakkam, Chennai", lat: 13.0569, lng: 80.2425 },
+  { name: "Kilpauk, Chennai", lat: 13.0784, lng: 80.2407 },
+  { name: "Alwarpet, Chennai", lat: 13.0336, lng: 80.252 },
+  { name: "Besant Nagar, Chennai", lat: 13.0001, lng: 80.2667 },
+  { name: "Porur, Chennai", lat: 13.0382, lng: 80.1565 },
+  { name: "Tambaram, Chennai", lat: 12.9249, lng: 80.1 },
+  { name: "OMR / Thoraipakkam, Chennai", lat: 12.9438, lng: 80.2366 },
+  { name: "Royapettah, Chennai", lat: 13.0587, lng: 80.2642 },
+  { name: "Egmore, Chennai", lat: 13.0732, lng: 80.2609 },
+  { name: "Kodambakkam, Chennai", lat: 13.0514, lng: 80.2241 },
+];

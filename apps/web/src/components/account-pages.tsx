@@ -162,6 +162,7 @@ type Order = Transaction & {
   product: Product;
   shop: ShopType;
   reviewed: boolean;
+  review?: import("../../../../packages/shared/src").Review;
 };
 export function TransactionsPage() {
   return (
@@ -176,6 +177,42 @@ function Transactions() {
   const [review, setReview] = useState<Order | null>(null);
   const [cancel, setCancel] = useState<Order | null>(null);
   const [rating, setRating] = useState(5);
+  const [editingReview, setEditingReview] = useState<import("../../../../packages/shared/src").Review | null>(null);
+  const [editRating, setEditRating] = useState(5);
+  const [editText, setEditText] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingReview) return;
+    setSavingEdit(true);
+    try {
+      await api(`/reviews/${editingReview.id}`, {
+        method: "PATCH",
+        body: { rating: editRating, text: editText },
+      });
+      await cache.invalidateQueries();
+      toast("Your review has been updated.");
+      setEditingReview(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to update review.";
+      toast(msg);
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleDeleteReview(reviewId: string) {
+    if (!confirm("Are you sure you want to delete your review?")) return;
+    try {
+      await api(`/reviews/${reviewId}`, { method: "DELETE" });
+      await cache.invalidateQueries();
+      toast("Your review has been deleted.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to delete review.";
+      toast(msg);
+    }
+  }
   const {
     data = [],
     isPending,
@@ -246,10 +283,11 @@ function Transactions() {
                     <h3>{t.product?.name || "Product"}</h3>
                   </Link>
                   <p>
-                    {t.shop?.name || "Neighbourhood shop"} · Quantity{" "}
-                    {t.quantity}
+                    <strong>{t.shop?.name || "Neighbourhood shop"}</strong>
+                    {t.shop?.address ? ` · ${t.shop.address}` : ""}
                   </p>
                   <p>
+                    Quantity: {t.quantity} · Reserved on{" "}
                     {new Date(t.createdAt).toLocaleDateString("en-IN", {
                       day: "numeric",
                       month: "short",
@@ -261,15 +299,73 @@ function Transactions() {
                   <strong>{money(t.total)}</strong>
                   <p>
                     <span
-                      className={`badge ${t.status === "CANCELLED" ? "gray" : t.status === "INITIATED" ? "amber" : ""}`}
+                      className={`badge ${t.status === "CANCELLED" ? "gray" : t.status === "INITIATED" ? "amber" : t.status === "COMPLETED" ? "green" : ""}`}
                     >
                       {t.status === "INITIATED"
                         ? "Awaiting confirmation"
-                        : t.status.toLowerCase()}
+                        : t.status === "CONFIRMED"
+                          ? "Ready for pickup"
+                          : t.status.toLowerCase()}
                     </span>
                   </p>
                 </div>
               </div>
+              {t.pickupOtp && ["INITIATED", "CONFIRMED"].includes(t.status) && (
+                <div
+                  style={{
+                    background: "#f0fdf4",
+                    border: "1px dashed #22c55e",
+                    borderRadius: "8px",
+                    padding: "10px 14px",
+                    marginTop: "12px",
+                    marginBottom: "8px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: "700",
+                        textTransform: "uppercase",
+                        color: "#166534",
+                        letterSpacing: "0.5px",
+                        display: "block",
+                      }}
+                    >
+                      Store Pickup OTP
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "20px",
+                        fontWeight: "800",
+                        color: "#15803d",
+                        letterSpacing: "3px",
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {t.pickupOtp}
+                    </span>
+                  </div>
+                  <p
+                    style={{
+                      fontSize: "11px",
+                      color: "#166534",
+                      margin: 0,
+                      maxWidth: "360px",
+                      lineHeight: "1.4",
+                    }}
+                  >
+                    Present this 6-digit code at{" "}
+                    <strong>{t.shop?.name || "the shop"}</strong> during pickup to
+                    inspect, pay, and collect your item.
+                  </p>
+                </div>
+              )}
               <div className="transaction-actions">
                 <span>Reservation #{t.id.slice(0, 8)} · Pay at pickup</span>
                 <div className="row">
@@ -299,10 +395,34 @@ function Transactions() {
                     </Button>
                   )}
                   {t.reviewed && (
-                    <span className="badge">
-                      <ShieldCheck size={12} />
-                      Review submitted
-                    </span>
+                    <div className="row" style={{ gap: "6px", alignItems: "center" }}>
+                      <span className="badge">
+                        <ShieldCheck size={12} />
+                        {t.review ? `${t.review.rating}★ Reviewed` : "Review submitted"}
+                      </span>
+                      {t.review && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingReview(t.review!);
+                              setEditRating(t.review!.rating);
+                              setEditText(t.review!.text);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleDeleteReview(t.review!.id)}
+                          >
+                            Delete
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   )}
                   <Button asChild variant="outline" size="sm">
                     <Link href={`/shops/${t.shopId}`}>
@@ -382,6 +502,40 @@ function Transactions() {
           )}
           <Button disabled={reviewMutation.isPending}>
             Publish verified review
+          </Button>
+        </form>
+      </Dialog>
+      <Dialog
+        open={!!editingReview}
+        onOpenChange={(v) => { if (!v) setEditingReview(null); }}
+        title="Edit your review"
+        description="Update your star rating or review text."
+      >
+        <form className="stack" onSubmit={handleSaveEdit}>
+          <div className="review-stars">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                type="button"
+                key={n}
+                className={n <= editRating ? "active" : ""}
+                onClick={() => setEditRating(n)}
+                aria-label={`${n} stars`}
+              >
+                ★
+              </button>
+            ))}
+          </div>
+          <textarea
+            required
+            minLength={5}
+            maxLength={2000}
+            rows={4}
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            placeholder="Share your experience…"
+          />
+          <Button disabled={savingEdit}>
+            {savingEdit ? "Saving…" : "Save changes"}
           </Button>
         </form>
       </Dialog>

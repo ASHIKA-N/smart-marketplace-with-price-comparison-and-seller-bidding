@@ -5,6 +5,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Query,
   Req,
@@ -146,6 +147,10 @@ export class MarketplaceController {
   ) {
     return this.product(id, q, req);
   }
+  @Get("geocode") async geocode(@Query("q") q?: string) {
+    if (!q || !q.trim()) return { results: [] };
+    return { results: await this.market.geocode(q.trim()) };
+  }
   @Get("shops") shops(@Query() q: unknown) {
     return this.market.shops(q);
   }
@@ -221,6 +226,26 @@ export class MarketplaceController {
   ) {
     return this.market.review(req.user, body);
   }
+  @UseGuards(AuthGuard) @Patch("reviews/:id") editReview(
+    @Req() req: AuthRequest,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    return this.market.editReview(req.user, id, body);
+  }
+  @UseGuards(AuthGuard) @Delete("reviews/:id") deleteReview(
+    @Req() req: AuthRequest,
+    @Param("id") id: string,
+  ) {
+    return this.market.deleteReview(req.user, id);
+  }
+  @UseGuards(AuthGuard) @Post("reviews/:id/reply") replyReview(
+    @Req() req: AuthRequest,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    return this.market.replyReview(req.user, id, body);
+  }
   @UseGuards(AuthGuard) @Get("favorites") favorites(@Req() req: AuthRequest) {
     return this.market.favorites(req.user);
   }
@@ -244,6 +269,37 @@ export class MarketplaceController {
     @Body() body: unknown,
   ) {
     return this.market.bid(req.user, body);
+  }
+  @UseGuards(AuthGuard) @Post("listing-bids") placeBid(
+    @Req() req: AuthRequest,
+    @Body() body: unknown,
+  ) {
+    return this.market.placeBid(req.user, body);
+  }
+  @UseGuards(AuthGuard) @Get("seller/listing-bids") sellerListingBids(
+    @Req() req: AuthRequest,
+  ) {
+    requireSeller(req.user);
+    return this.market.sellerListingBids(req.user);
+  }
+  @UseGuards(AuthGuard) @Get("buyer/listing-bids") buyerListingBids(
+    @Req() req: AuthRequest,
+  ) {
+    return this.market.buyerListingBids(req.user);
+  }
+  @UseGuards(AuthGuard) @Patch("listing-bids/:id/accept") acceptListingBid(
+    @Req() req: AuthRequest,
+    @Param("id") id: string,
+  ) {
+    requireSeller(req.user);
+    return this.market.acceptListingBid(req.user, id);
+  }
+  @UseGuards(AuthGuard) @Patch("listing-bids/:id/reject") rejectListingBid(
+    @Req() req: AuthRequest,
+    @Param("id") id: string,
+  ) {
+    requireSeller(req.user);
+    return this.market.rejectListingBid(req.user, id);
   }
   @UseGuards(AuthGuard) @Get("notifications") async notifications(
     @Req() req: AuthRequest,

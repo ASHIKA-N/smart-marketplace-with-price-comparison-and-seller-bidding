@@ -11,6 +11,7 @@ import {
   ProfilePage,
 } from "@/components/account-pages";
 import { SellerPage } from "@/components/seller-page";
+import { BuyerBidsPage } from "@/components/buyer-bids-page";
 import { AdminPage } from "@/components/admin-page";
 import { Loading } from "@/components/shell";
 export default async function Page({
@@ -71,6 +72,7 @@ export default async function Page({
   else if (first === "requests" && slug.length === 1)
     content = <RequestsPage />;
   else if (first === "profile" && slug.length === 1) content = <ProfilePage />;
+  else if (first === "my-bids" && slug.length === 1) content = <BuyerBidsPage />;
   else if (first === "admin" && slug.length === 1) content = <AdminPage />;
   else if (
     first === "seller" &&
@@ -83,6 +85,8 @@ export default async function Page({
         "offers",
         "transactions",
         "bids",
+        "listing-bids",
+        "reviews",
       ].includes(second))
   )
     content = <SellerPage tab={second || ""} />;

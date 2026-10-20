@@ -75,6 +75,8 @@ export function ProductCard({ product: p }: { product: ProductResult }) {
           <span className="product-badge local">
             <Leaf size={11} /> Locally made
           </span>
+        ) : p.pricingMode === "BIDDING" ? (
+          <span className="product-badge bidding">Bidding Open</span>
         ) : null}
         <FavoriteButton id={p.id} />
       </div>
@@ -86,7 +88,7 @@ export function ProductCard({ product: p }: { product: ProductResult }) {
             {p.rating.toFixed(1)} <small>({p.reviews})</small>
           </span>
         </div>
-        <Link href={`/products/${p.id}`} className="product-name">
+        <Link href={`/products/${p.id}`} className="product-name" title={p.name}>
           {p.name}
         </Link>
         <div className="price-line">
@@ -95,14 +97,19 @@ export function ProductCard({ product: p }: { product: ProductResult }) {
           </span>
           {p.discount > 0 && <del>{money(p.maxPrice)}</del>}
         </div>
+        <div className="product-status-row">
+          <span className="status-dot" />
+          <span>In Stock · Available</span>
+        </div>
         <div className="product-location">
           <Store size={13} />
-          {p.sellerCount} nearby sellers <span>·</span>
+          <span>{p.sellerCount} nearby {p.sellerCount === 1 ? "seller" : "sellers"}</span>
+          <span>·</span>
           <MapPin size={12} />
-          {p.distance.toFixed(1)} km
+          <span>{p.distance.toFixed(1)} km away</span>
         </div>
-        <Link className="compare-link" href={`/products/${p.id}/compare`}>
-          Compare prices <ArrowRight size={15} />
+        <Link className="compare-link" href={`/products/${p.id}/compare`} aria-label="Compare prices">
+          View Prices <ArrowRight size={14} />
         </Link>
       </div>
     </article>
@@ -139,7 +146,7 @@ export function ShopCard({ shop: s }: { shop: Shop }) {
           </span>
           <span>
             <MapPin size={13} />
-            {s.distance?.toFixed(1) ?? "—"} km
+            {s.distance != null ? `${s.distance.toFixed(1)} km (straight line)` : "—"}
           </span>
           <Link href={`/shops/${s.id}`} aria-label={`Visit ${s.name}`}>
             <ArrowUpRight size={19} />

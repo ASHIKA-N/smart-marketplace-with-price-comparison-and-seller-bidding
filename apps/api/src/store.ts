@@ -34,16 +34,7 @@ export class StoreService implements OnModuleInit {
             );
           }
         }
-        for (const shop of this.state.shops) {
-          const original = seed.shops.find((s) => s.id === shop.id);
-          if (original && shop.lng > 77 && shop.lng < 78) {
-            Object.assign(shop, {
-              lat: original.lat,
-              lng: original.lng,
-              address: original.address,
-            });
-          }
-        }
+        if (!this.state.listingBids) this.state.listingBids = [];
         await this.saveFile();
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -118,6 +109,7 @@ export class StoreService implements OnModuleInit {
       "requests",
       "bids",
       "audits",
+      "listingBids",
     ] as const) {
       Object.assign(state, {
         [key]: records.find((r) => r.key === key)?.data || [],
@@ -172,6 +164,7 @@ export class StoreService implements OnModuleInit {
       "requests",
       "bids",
       "audits",
+      "listingBids",
     ] as const)
       await tx.appRecord.upsert({
         where: { key },
