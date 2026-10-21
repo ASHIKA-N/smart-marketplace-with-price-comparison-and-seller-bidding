@@ -11,7 +11,6 @@ import {
   Store,
   Menu,
   X,
-  LocateFixed,
   Bell,
   LogOut,
   ShoppingBag,
@@ -49,9 +48,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [locationOpen, setLocationOpen] = useState(false);
   const [menu, setMenu] = useState(false);
   const [notifications, setNotifications] = useState(false);
-  const [locating, setLocating] = useState(false);
   const [locFilter, setLocFilter] = useState("");
-  const [locError, setLocError] = useState("");
   const [showCustomCoord, setShowCustomCoord] = useState(false);
   const [geoResults, setGeoResults] = useState<{ name: string; lat: number; lng: number; displayName: string }[]>([]);
   const [searchingGeo, setSearchingGeo] = useState(false);
@@ -99,37 +96,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-  function locate() {
-    setLocError("");
-    if (!navigator.geolocation) {
-      const msg = "Geolocation is not supported by your browser. Please choose or enter a neighbourhood below.";
-      setLocError(msg);
-      toast(msg);
-      return;
-    }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        setLocation({
-          lat: p.coords.latitude,
-          lng: p.coords.longitude,
-          name: "Your current location",
-        });
-        setLocating(false);
-        setLocationOpen(false);
-        setLocError("");
-        toast("Nearby results now use your location.");
-      },
-      (err) => {
-        setLocating(false);
-        const reason = err.code === 1 ? "Location permission denied." : err.code === 2 ? "Position unavailable." : "Location request timed out.";
-        const msg = `${reason} Please search or select a neighbourhood below.`;
-        setLocError(msg);
-        toast(msg);
-      },
-      { timeout: 10000 },
-    );
-  }
   return (
     <>
       <div className="announcement">
@@ -318,7 +284,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
         onOpenChange={(v) => {
           setLocationOpen(v);
           if (!v) {
-            setLocError("");
             setLocFilter("");
           }
         }}
@@ -326,11 +291,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
         description="We use your location to show nearby shops and calculate their distance. Your location history is not saved."
       >
         <div className="stack">
-          <Button onClick={locate} disabled={locating}>
-            <LocateFixed size={17} />
-            {locating ? "Finding your location…" : "Use my current location"}
-          </Button>
-          {locError && <p className="form-error">{locError}</p>}
           <div className="row spread" style={{ alignItems: "center" }}>
             <span className="eyebrow" style={{ margin: 0 }}>CHOOSE OR SEARCH A NEIGHBOURHOOD</span>
             <button

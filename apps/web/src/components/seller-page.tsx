@@ -432,11 +432,16 @@ function ShopEditor({ data }: { data: Dashboard }) {
             toast("Coordinates must be valid numbers (Latitude -90 to 90, Longitude -180 to 180).");
             return;
           }
+          const rawPhone = String(f.get("phone") || "").trim();
+          if (!/^\d{10}$/.test(rawPhone)) {
+            toast("Phone number must be exactly 10 digits.");
+            return;
+          }
           save.mutate({
             name: f.get("name"),
             description: f.get("description"),
             address: f.get("address"),
-            phone: f.get("phone"),
+            phone: rawPhone,
             lat: latNum,
             lng: lngNum,
             image: f.get("image"),
@@ -525,30 +530,6 @@ function ShopEditor({ data }: { data: Dashboard }) {
                   <option key={n.name} value={n.name}>{n.name}</option>
                 ))}
               </select>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (!navigator.geolocation) {
-                    toast("Geolocation is not supported by your browser.");
-                    return;
-                  }
-                  navigator.geolocation.getCurrentPosition(
-                    (pos) => {
-                      setShopLat(Number(pos.coords.latitude.toFixed(6)));
-                      setShopLng(Number(pos.coords.longitude.toFixed(6)));
-                      toast("Shop coordinates updated from device GPS.");
-                    },
-                    (err) => {
-                      toast(`Could not get device location: ${err.message}`);
-                    },
-                    { timeout: 10000 }
-                  );
-                }}
-              >
-                Use current device location
-              </Button>
             </div>
           </div>
           <label className="field">
@@ -578,15 +559,17 @@ function ShopEditor({ data }: { data: Dashboard }) {
             />
           </label>
           <label className="field full">
-            Phone number
+            Phone number (10 digits)
             <input
               name="phone"
               type="tel"
-              minLength={7}
-              maxLength={25}
+              pattern="[0-9]{10}"
+              minLength={10}
+              maxLength={10}
               required
-              defaultValue={shop?.phone}
-              placeholder="+91 …"
+              defaultValue={shop?.phone ? shop.phone.replace(/\D/g, "").slice(-10) : ""}
+              placeholder="10-digit mobile number"
+              title="Please enter a 10-digit phone number"
             />
           </label>
           <label className="field">
